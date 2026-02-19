@@ -11,12 +11,16 @@ function rowToAnnotation(row: {
   position_x: number;
   position_y: number;
   position_z: number;
+  media_url?: string | null;
+  video_url?: string | null;
 }): Annotation {
   return {
     id: row.id,
     label: row.label,
     description: row.description ?? "",
     position: [row.position_x, row.position_y, row.position_z],
+    media_url: row.media_url ?? undefined,
+    video_url: row.video_url ?? undefined,
   };
 }
 
@@ -30,7 +34,7 @@ export function useAnnotations(modelId: string | null) {
     setLoading(true);
     const { data } = await supabase
       .from("annotations")
-      .select("id, label, description, position_x, position_y, position_z")
+      .select("id, label, description, position_x, position_y, position_z, media_url, video_url")
       .eq("model_id", modelId)
       .order("created_at", { ascending: true });
     setAnnotations((data ?? []).map(rowToAnnotation));
@@ -59,7 +63,7 @@ export function useAnnotations(modelId: string | null) {
         position_y: position[1],
         position_z: position[2],
       })
-      .select("id, label, description, position_x, position_y, position_z")
+      .select("id, label, description, position_x, position_y, position_z, media_url, video_url")
       .single();
 
     if (error || !data) return null;
@@ -68,13 +72,26 @@ export function useAnnotations(modelId: string | null) {
     return ann;
   }, [modelId, user]);
 
-  const updateAnnotation = useCallback(async (id: string, label: string, description: string) => {
+  const updateAnnotation = useCallback(async (
+    id: string,
+    label: string,
+    description: string,
+    media_url?: string,
+    video_url?: string,
+  ) => {
     await supabase
       .from("annotations")
-      .update({ label, description: description || null })
+      .update({
+        label,
+        description: description || null,
+        media_url: media_url || null,
+        video_url: video_url || null,
+      })
       .eq("id", id);
     setAnnotations((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, label, description } : a))
+      prev.map((a) =>
+        a.id === id ? { ...a, label, description, media_url, video_url } : a
+      )
     );
   }, []);
 
