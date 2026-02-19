@@ -1,11 +1,13 @@
-import { useState, useCallback, useEffect, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2 } from "lucide-react";
-import ModelViewer from "@/components/ModelViewer";
+import { useState, useCallback, useEffect, useRef, Suspense } from "react";
+import { Layers, Crosshair, Info, Maximize2, Upload, FolderOpen, X } from "lucide-react";
+import ModelViewer, { DEFAULT_MODEL_URL } from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
 import { Annotation } from "@/components/AnnotationPin";
 
 let idCounter = 0;
 const genId = () => `ann_${Date.now()}_${idCounter++}`;
+
+const DEFAULT_MODEL_NAME = "DamagedHelmet.glTF";
 
 export default function Index() {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -16,7 +18,16 @@ export default function Index() {
   const [newDesc, setNewDesc] = useState("");
   const [arSupported, setArSupported] = useState<boolean | null>(null);
 
-  // Check WebXR AR support
+  // Model state
+  const [modelUrl, setModelUrl] = useState(DEFAULT_MODEL_URL);
+  const [modelKey, setModelKey] = useState("default");
+  const [modelName, setModelName] = useState(DEFAULT_MODEL_NAME);
+  const [isDragging, setIsDragging] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
+
   useEffect(() => {
     if (navigator.xr) {
       navigator.xr.isSessionSupported("immersive-ar").then(setArSupported);
@@ -36,6 +47,86 @@ export default function Index() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
+
+  const loadFile = useCallback((file: File) => {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext !== "gltf" && ext !== "glb") {
+      setLoadError(`Unsupported file type ".${ext}". Please drop a .gltf or .glb file.`);
+      return;
+    }
+    setLoadError(null);
+
+    // Revoke previous object URL
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+
+    const url = URL.createObjectURL(file);
+    objectUrlRef.current = url;
+
+    // Clear annotations when model changes
+    setAnnotations([]);
+    setSelectedId(null);
+    setModelUrl(url);
+    setModelKey(`custom_${Date.now()}`);
+    setModelName(file.name);
+  }, []);
+
+  // Drag & drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+      const file = e.dataTransfer.files[0];
+      if (file) loadFile(file);
+    },
+    [loadFile]
+  );
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) loadFile(file);
+      e.target.value = "";
+    },
+    [loadFile]
+  );
+
+  const resetToDefault = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setAnnotations([]);
+    setSelectedId(null);
+    setModelUrl(DEFAULT_MODEL_URL);
+    setModelKey("default");
+    setModelName(DEFAULT_MODEL_NAME);
+    setLoadError(null);
+  };
 
   const handlePlace = useCallback((pos: [number, number, number]) => {
     setPendingPos(pos);
@@ -75,7 +166,6 @@ export default function Index() {
 
   const handleAR = async () => {
     if (!arSupported) return;
-    // Initiate WebXR AR session
     try {
       const session = await (navigator.xr as any).requestSession("immersive-ar", {
         requiredFeatures: ["hit-test"],
@@ -87,21 +177,52 @@ export default function Index() {
     }
   };
 
+  const isCustomModel = modelUrl !== DEFAULT_MODEL_URL;
+
   return (
-    <div className="w-screen h-screen flex overflow-hidden relative" style={{ background: "hsl(var(--background))" }}>
+    <div
+      className="w-screen h-screen flex overflow-hidden relative"
+      style={{ background: "hsl(var(--background))" }}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".gltf,.glb"
+        className="hidden"
+        onChange={handleFileInput}
+      />
+
       {/* Scanline overlay */}
       <div className="scanline absolute inset-0 pointer-events-none z-10" />
 
-      {/* 3D Canvas — full background */}
+      {/* 3D Canvas */}
       <div className="absolute inset-0 z-0">
-        <Suspense fallback={
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--cyan))" }}>
-              LOADING MODEL...
+        <Suspense
+          fallback={
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+                  style={{ borderColor: "hsl(var(--cyan))", borderTopColor: "transparent" }}
+                />
+                <div
+                  className="font-mono text-xs tracking-widest"
+                  style={{ color: "hsl(var(--cyan))" }}
+                >
+                  LOADING MODEL...
+                </div>
+              </div>
             </div>
-          </div>
-        }>
+          }
+        >
           <ModelViewer
+            modelUrl={modelUrl}
+            modelKey={modelKey}
             annotations={annotations}
             selectedId={selectedId}
             isPlacingMode={isPlacingMode}
@@ -112,20 +233,78 @@ export default function Index() {
         </Suspense>
       </div>
 
+      {/* Drag & Drop Overlay */}
+      {isDragging && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-center fade-in pointer-events-none"
+          style={{
+            background: "hsl(220 20% 4% / 0.85)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <div
+            className="flex flex-col items-center gap-4 p-12 rounded-2xl"
+            style={{
+              border: "2px dashed hsl(var(--cyan))",
+              boxShadow: "0 0 40px hsl(185 100% 50% / 0.2), inset 0 0 60px hsl(185 100% 50% / 0.04)",
+            }}
+          >
+            <Upload size={40} style={{ color: "hsl(var(--cyan))", filter: "drop-shadow(0 0 12px hsl(185 100% 50% / 0.8))" }} />
+            <div className="text-center">
+              <div
+                className="font-mono font-bold tracking-widest uppercase mb-1"
+                style={{ color: "hsl(var(--cyan))", fontSize: 16 }}
+              >
+                Drop Model Here
+              </div>
+              <div
+                className="font-mono text-xs"
+                style={{ color: "hsl(var(--muted-foreground))" }}
+              >
+                Supports .gltf and .glb files
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-5 py-3">
         <div className="glass-panel flex items-center gap-3 px-4 py-2 rounded-lg">
           <Layers size={14} style={{ color: "hsl(var(--cyan))" }} />
-          <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--foreground))" }}>
+          <span
+            className="font-mono text-xs font-bold tracking-widest uppercase"
+            style={{ color: "hsl(var(--foreground))" }}
+          >
             AR Model Viewer
           </span>
           <div className="w-px h-3 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-          <span className="font-mono text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>
-            DamagedHelmet.glTF
+          <span className="font-mono text-xs max-w-48 truncate" style={{ color: "hsl(var(--muted-foreground))" }}>
+            {modelName}
           </span>
+          {isCustomModel && (
+            <button
+              onClick={resetToDefault}
+              className="ml-1 rounded p-0.5 transition-colors hover:bg-white/5"
+              style={{ color: "hsl(var(--muted-foreground))" }}
+              title="Reset to demo model"
+            >
+              <X size={11} />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Load File button */}
+          <button
+            className="glass-panel btn-ghost-cyan px-3 py-2 rounded-lg flex items-center gap-2"
+            onClick={() => fileInputRef.current?.click()}
+            title="Load a GLTF or GLB file"
+          >
+            <FolderOpen size={12} />
+            <span className="tracking-widest uppercase">Load Model</span>
+          </button>
+
           {/* AR Button */}
           <button
             className={`glass-panel px-3 py-2 rounded-lg flex items-center gap-2 font-mono text-xs transition-all duration-200 ${
@@ -141,7 +320,10 @@ export default function Index() {
             </span>
           </button>
 
-          <button className="glass-panel p-2 rounded-lg" style={{ color: "hsl(var(--muted-foreground))" }}>
+          <button
+            className="glass-panel p-2 rounded-lg"
+            style={{ color: "hsl(var(--muted-foreground))" }}
+          >
             <Maximize2 size={14} />
           </button>
         </div>
@@ -150,9 +332,18 @@ export default function Index() {
       {/* Bottom-left: Controls hint */}
       <div className="absolute bottom-5 left-5 z-20 glass-panel px-3 py-2 rounded-lg">
         <div className="font-mono space-y-1" style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Drag</span> — Orbit</div>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Scroll</span> — Zoom</div>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Right drag</span> — Pan</div>
+          <div>
+            <span style={{ color: "hsl(var(--cyan))" }}>Drag</span> — Orbit
+          </div>
+          <div>
+            <span style={{ color: "hsl(var(--cyan))" }}>Scroll</span> — Zoom
+          </div>
+          <div>
+            <span style={{ color: "hsl(var(--cyan))" }}>Right drag</span> — Pan
+          </div>
+          <div style={{ color: "hsl(var(--muted-foreground) / 0.6)", borderTop: "1px solid hsl(var(--glass-border))", paddingTop: 4, marginTop: 2 }}>
+            <span style={{ color: "hsl(var(--cyan))" }}>Drop</span> .gltf / .glb to load
+          </div>
           {isPlacingMode && (
             <div className="fade-in" style={{ color: "hsl(var(--cyan))" }}>
               Click model to place pin
@@ -160,6 +351,26 @@ export default function Index() {
           )}
         </div>
       </div>
+
+      {/* Load error toast */}
+      {loadError && (
+        <div
+          className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 glass-panel px-4 py-3 rounded-lg flex items-center gap-3 fade-in"
+          style={{ borderColor: "hsl(var(--destructive) / 0.5)" }}
+        >
+          <X size={12} style={{ color: "hsl(var(--destructive))" }} />
+          <span className="font-mono text-xs" style={{ color: "hsl(var(--foreground))" }}>
+            {loadError}
+          </span>
+          <button
+            onClick={() => setLoadError(null)}
+            className="ml-2"
+            style={{ color: "hsl(var(--muted-foreground))" }}
+          >
+            <X size={10} />
+          </button>
+        </div>
+      )}
 
       {/* Right panel — Annotations */}
       <div className="absolute right-5 top-16 bottom-5 z-20 w-64 flex flex-col">
@@ -177,11 +388,17 @@ export default function Index() {
 
       {/* Pending annotation modal */}
       {pendingPos && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ background: "hsl(220 20% 4% / 0.6)", backdropFilter: "blur(4px)" }}>
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center"
+          style={{ background: "hsl(220 20% 4% / 0.6)", backdropFilter: "blur(4px)" }}
+        >
           <div className="glass-panel rounded-xl p-6 w-80 fade-in space-y-4">
             <div className="flex items-center gap-2">
               <Info size={14} style={{ color: "hsl(var(--cyan))" }} />
-              <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--cyan))" }}>
+              <span
+                className="font-mono text-xs font-bold tracking-widest uppercase"
+                style={{ color: "hsl(var(--cyan))" }}
+              >
                 New Annotation
               </span>
             </div>

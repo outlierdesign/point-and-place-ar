@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useCallback } from "react";
 import { Canvas, useThree, ThreeEvent } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -12,18 +12,27 @@ import * as THREE from "three";
 import AnnotationPin, { Annotation } from "./AnnotationPin";
 
 // Demo model — Damaged Helmet from Three.js examples
-const MODEL_URL =
+export const DEFAULT_MODEL_URL =
   "https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf";
 
-function DemoModel({
+function SceneModel({
+  url,
   isPlacingMode,
   onPlace,
 }: {
+  url: string;
   isPlacingMode: boolean;
   onPlace: (pos: [number, number, number]) => void;
 }) {
-  const { scene } = useGLTF(MODEL_URL);
+  const { scene } = useGLTF(url);
   const ref = useRef<THREE.Group>(null);
+
+  // Clone scene so multiple renders of the same URL don't share state
+  const cloned = useRef<THREE.Group | null>(null);
+  if (!cloned.current || cloned.current.userData.__sourceUrl !== url) {
+    cloned.current = scene.clone(true);
+    cloned.current.userData.__sourceUrl = url;
+  }
 
   const handleClick = useCallback(
     (e: ThreeEvent<MouseEvent>) => {
@@ -42,10 +51,7 @@ function DemoModel({
   return (
     <Center>
       <group ref={ref} onClick={handleClick}>
-        <primitive
-          object={scene}
-          style={{ cursor: isPlacingMode ? "crosshair" : "auto" }}
-        />
+        <primitive object={scene} />
       </group>
     </Center>
   );
@@ -54,13 +60,11 @@ function DemoModel({
 function SceneBackground() {
   return (
     <>
-      {/* Ambient + directional light */}
       <ambientLight intensity={0.3} />
       <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
       <pointLight position={[-5, 3, -3]} intensity={0.8} color="#00d4ff" />
       <pointLight position={[5, -2, 5]} intensity={0.4} color="#0080ff" />
 
-      {/* Grid floor */}
       <Grid
         position={[0, -1.2, 0]}
         args={[20, 20]}
@@ -89,19 +93,15 @@ function SceneBackground() {
   );
 }
 
-function ARRaycaster({
-  isPlacingMode,
-  onPlace,
-}: {
-  isPlacingMode: boolean;
-  onPlace: (pos: [number, number, number]) => void;
-}) {
+function CursorSetter({ isPlacingMode }: { isPlacingMode: boolean }) {
   const { gl } = useThree();
   gl.domElement.style.cursor = isPlacingMode ? "crosshair" : "grab";
   return null;
 }
 
 interface ModelViewerProps {
+  modelUrl: string;
+  modelKey: string;
   annotations: Annotation[];
   selectedId: string | null;
   isPlacingMode: boolean;
@@ -111,6 +111,8 @@ interface ModelViewerProps {
 }
 
 export default function ModelViewer({
+  modelUrl,
+  modelKey,
   annotations,
   selectedId,
   isPlacingMode,
@@ -126,9 +128,15 @@ export default function ModelViewer({
       style={{ background: "transparent" }}
     >
       <SceneBackground />
-      <ARRaycaster isPlacingMode={isPlacingMode} onPlace={onPlace} />
+      <CursorSetter isPlacingMode={isPlacingMode} />
 
-      <DemoModel isPlacingMode={isPlacingMode} onPlace={onPlace} />
+      {/* key forces remount when model changes, clearing useGLTF cache per URL */}
+      <SceneModel
+        key={modelKey}
+        url={modelUrl}
+        isPlacingMode={isPlacingMode}
+        onPlace={onPlace}
+      />
 
       {annotations.map((ann) => (
         <AnnotationPin
@@ -144,13 +152,13 @@ export default function ModelViewer({
         makeDefault
         enableDamping
         dampingFactor={0.05}
-        minDistance={1}
-        maxDistance={10}
+        minDistance={0.5}
+        maxDistance={20}
         enabled={!isPlacingMode}
       />
     </Canvas>
   );
 }
 
-// Preload the model
-useGLTF.preload(MODEL_URL);
+// Preload the default model
+useGLTF.preload(DEFAULT_MODEL_URL);
