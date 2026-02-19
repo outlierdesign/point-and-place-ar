@@ -1,108 +1,49 @@
 
-## What We're Building
+## Root Cause: Auth + Admin Race Condition
 
-Two things are needed:
+The stall happens because of a conflict between two concurrent async operations in `useAuth.tsx`:
 
-**1. A self-service admin upgrade flow** — right now, uploading models requires your account to have the `admin` role, but that role can only be assigned by running raw SQL. We'll add a secure way for you to elevate your own account to admin directly from the app (or provide clear in-app instructions), so model uploading works without touching the database directly.
+1. `supabase.auth.getSession()` — fetches the current session, then awaits `fetchIsAdmin()` (a database query), then calls `setLoading(false)`
+2. `supabase.auth.onAuthStateChange()` — fires **immediately on mount** (Supabase always fires `INITIAL_SESSION` event synchronously), and also calls `setLoading(false)` — but it also triggers `fetchIsAdmin()` for the same user at the same time
 
-**2. A full brand redesign** — replacing the current cyan-on-dark "tech" theme with the Acres Ireland identity across every screen: main viewer, embed view, and auth page.
+This results in two simultaneous `fetchIsAdmin` calls racing each other. More critically, in some timing scenarios `onAuthStateChange` fires its `setLoading(false)` **before** `getSession`'s `fetchIsAdmin` resolves — causing the app to briefly show as non-admin, or the UI appears stuck waiting for the admin check.
 
----
+The real problem is that **both paths run in parallel** and both set state independently, leading to unpredictable ordering.
 
-## Brand Specification
+## The Fix
 
-| Token | Value |
-|---|---|
-| Body background | `#192C20` (dark green) |
-| Panel / card | `#113B29` (deep green) |
-| Gold accent | `#A7782B` |
-| Footer / darkest | `#122017` |
-| Display font | Red Hat Display (Google Fonts) |
-| Body / UI font | Epilogue (Google Fonts) |
-| Serif / quotes | Cambo (Google Fonts) |
-| Button style | Gold fill `#A7782B`, no border-radius, Epilogue 13px |
+Supabase's own documentation recommends using `onAuthStateChange` as the **single source of truth** and NOT calling `getSession` separately in the same hook. The `INITIAL_SESSION` event from `onAuthStateChange` covers the initial load case.
 
----
+The corrected pattern:
 
-## Technical Plan
+- Remove the separate `getSession()` call entirely
+- Use `onAuthStateChange` exclusively, which fires `INITIAL_SESSION` on mount with the current session (or null if not logged in)
+- Set `loading: false` only **after** `fetchIsAdmin` completes (for the initial event) or immediately (for sign-out)
+- This eliminates the race condition entirely — there's only one code path
 
-### Step 1 — Admin Self-Grant Mechanism
+## Files to Change
 
-The `user_roles` table currently has no INSERT policy, so only a database-level operation can make someone admin. We will add a **secure database function** (`claim_admin`) that checks if there are zero existing admins and, if so, grants the caller admin status. This means you can sign up and become admin via a button in the app — but only if no admin exists yet. This is the standard "first-run" pattern.
+### `src/hooks/useAuth.tsx`
 
-A migration will:
-- Create a `public.claim_admin()` function with `SECURITY DEFINER`
-- The function grants `admin` to `auth.uid()` only when the `user_roles` table has no existing admin
+Remove the standalone `supabase.auth.getSession()` block. Rely solely on `onAuthStateChange`, which will fire with event `INITIAL_SESSION` on mount. The listener already handles `fetchIsAdmin` and `setLoading(false)` correctly.
 
-The UI will show a "Claim Admin Access" button on the Model Library panel when the user is logged in but not yet admin, and no admins exist. Once clicked, it calls the function and refreshes the role.
-
-### Step 2 — Font Loading
-
-Update `index.html` to load from Google Fonts:
-- `Red Hat Display` (weights 400, 500, 600, 700)
-- `Epilogue` (weights 300, 400, 500, 600, 700)
-- `Cambo` (weight 400)
-
-### Step 3 — CSS Design Tokens (`src/index.css`)
-
-Replace the current cyan/dark-space tokens with the Acres Ireland palette:
+The new logic flow:
 
 ```text
---background:    #192C20  (dark green body)
---card:          #113B29  (deep green panels)
---primary:       #A7782B  (gold accent)
---foreground:    #E8DFC8  (warm off-white text)
---border:        #2A4A35  (subtle green border)
---muted:         #122017  (darkest, footer)
+Mount
+  └─> onAuthStateChange fires with INITIAL_SESSION
+        ├─> session exists?
+        │     ├─> YES: fetchIsAdmin() → setIsAdmin() → setLoading(false)
+        │     └─> NO:  setIsAdmin(false) → setLoading(false)
+        └─> (subsequent SIGNED_IN / SIGNED_OUT events work identically)
 ```
 
-All `hsl(var(--cyan))` references in CSS utility classes (`glass-panel`, `btn-cyan`, `btn-ghost-cyan`, `annotation-label`, glow keyframes) will be updated to use the gold token.
+The `refreshAuth` function is kept as-is since it's used after `claim_admin` RPC to re-check the role without waiting for an auth event.
 
-The `scanline` effect will be removed (not appropriate for this brand).
+## Technical Detail: Why This Works
 
-### Step 4 — Tailwind Config (`tailwind.config.ts`)
+`onAuthStateChange` in Supabase JS v2 fires `INITIAL_SESSION` synchronously during the subscribe call, passing the cached session from `localStorage` if one exists. So there's no need for a separate `getSession()` — the listener handles both cases:
+- **Logged in**: fires with the session immediately, `fetchIsAdmin` runs once
+- **Logged out**: fires with `null` session, sets `isAdmin: false` and `loading: false` immediately (no DB call)
 
-Remove the `cyan` and `glass` custom colour tokens. Add a `gold` token pointing to the new CSS variable.
-
-### Step 5 — Button Style Update
-
-The `btn-cyan` class (used on all primary CTAs) will be renamed/updated in CSS to produce:
-- Background: `#A7782B`
-- Color: white or `#192C20`
-- `border-radius: 0` (square corners)
-- `font-family: 'Epilogue', sans-serif`
-- `font-size: 13px`
-
-The `btn-ghost-cyan` (outline/ghost buttons) will use a gold border and gold text on transparent background.
-
-### Step 6 — Component Styling Sweep
-
-All inline `hsl(var(--cyan))` style references across these files will be updated to `hsl(var(--gold))` or the equivalent hex:
-
-- `src/pages/Index.tsx` — top bar, controls hint, loading spinner, drag overlay
-- `src/components/ModelLibrary.tsx` — header dot, selected state ring, upload button
-- `src/components/AnnotationPanel.tsx` — header, pin toggle button, item selection highlight
-- `src/components/AnnotationPin.tsx` — sphere colour, ring colour, line, label border
-- `src/pages/Auth.tsx` — logo icon, input focus border, sign-in button, link hover
-- `src/pages/Embed.tsx` — top bar, controls hint, loading spinner, modal
-
-### Step 7 — Typography
-
-Body font changed from `Space Grotesk` to `Epilogue`. Monospace labels changed from `JetBrains Mono` to `Red Hat Display` (as a display/label font). The `.font-mono` class will be repointed.
-
----
-
-## Files Changed
-
-| File | Change |
-|---|---|
-| `index.html` | Add Google Fonts import for Red Hat Display, Epilogue, Cambo |
-| `src/index.css` | Replace all colour tokens, font families, remove scanline, update button/glass styles |
-| `tailwind.config.ts` | Update custom colour tokens |
-| `src/pages/Index.tsx` | Update all inline colour refs |
-| `src/pages/Auth.tsx` | Update all inline colour refs |
-| `src/pages/Embed.tsx` | Update all inline colour refs |
-| `src/components/ModelLibrary.tsx` | Update colours + add Claim Admin button |
-| `src/components/AnnotationPanel.tsx` | Update colours |
-| `src/components/AnnotationPin.tsx` | Update pin/sphere/label colours |
-| New DB migration | Add `claim_admin()` security-definer function + INSERT policy on `user_roles` |
+This is also why the current code stalls — both `getSession` and the `INITIAL_SESSION` event race to call `fetchIsAdmin` and `setLoading(false)` at the same time.
