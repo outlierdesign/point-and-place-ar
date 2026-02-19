@@ -8,6 +8,7 @@ interface AuthContextType {
   isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -16,7 +17,18 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   loading: true,
   signOut: async () => {},
+  refreshAuth: async () => {},
 });
+
+async function fetchIsAdmin(userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  return !!data;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -24,23 +36,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const checkAdmin = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    setIsAdmin(!!data);
-  };
-
+  // Initial load: get session once, resolve loading immediately
   useEffect(() => {
+    let cancelled = false;
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (cancelled) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        const admin = await fetchIsAdmin(session.user.id);
+        if (!cancelled) setIsAdmin(admin);
+      }
+      if (!cancelled) setLoading(false);
+    });
+
+    // Listen for subsequent auth changes (sign in / sign out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        if (cancelled) return;
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          await checkAdmin(session.user.id);
+          const admin = await fetchIsAdmin(session.user.id);
+          if (!cancelled) setIsAdmin(admin);
         } else {
           setIsAdmin(false);
         }
@@ -48,22 +67,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) checkAdmin(session.user.id);
-      else setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
+
+  const refreshAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    setSession(session);
+    setUser(session?.user ?? null);
+    if (session?.user) {
+      const admin = await fetchIsAdmin(session.user.id);
+      setIsAdmin(admin);
+    } else {
+      setIsAdmin(false);
+    }
+  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, isAdmin, loading, signOut }}>
+    <AuthContext.Provider value={{ user, session, isAdmin, loading, signOut, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );
