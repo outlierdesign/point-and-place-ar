@@ -23,15 +23,15 @@ const AuthContext = createContext<AuthContextType>({
 async function fetchIsAdmin(userId: string): Promise<boolean> {
   try {
     const timeout = new Promise<false>((resolve) =>
-      setTimeout(() => resolve(false), 5000)
+      setTimeout(() => resolve(false), 8000)
     );
+    // Use the has_role RPC (SECURITY DEFINER) to bypass any RLS timing issues
     const query = supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle()
-      .then(({ data }) => !!data);
+      .rpc("has_role", { _user_id: userId, _role: "admin" })
+      .then(({ data, error }) => {
+        if (error) return false;
+        return !!data;
+      });
 
     return await Promise.race([query, timeout]);
   } catch {
