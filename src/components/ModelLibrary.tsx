@@ -25,7 +25,7 @@ export default function ModelLibrary({
   onSelectModel,
   onRefresh,
 }: ModelLibraryProps) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, adminLoading } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -140,7 +140,11 @@ export default function ModelLibrary({
           </span>
         </div>
 
-        {isAdmin && (
+        {adminLoading ? (
+          <div className="flex items-center justify-center py-2">
+            <Loader2 size={12} className="animate-spin" style={{ color: "hsl(var(--gold))" }} />
+          </div>
+        ) : isAdmin && (
           <>
             <input
               ref={fileInputRef}
