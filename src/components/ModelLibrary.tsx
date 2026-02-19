@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Upload, Trash2, CheckCircle2, Loader2, Box } from "lucide-react";
+import { Upload, Trash2, CheckCircle2, Loader2, Box, ImagePlus } from "lucide-react";
 
 export interface ModelRecord {
   id: string;
@@ -9,6 +9,7 @@ export interface ModelRecord {
   storage_path: string;
   file_size: number | null;
   created_at: string;
+  thumbnail_path: string | null;
 }
 
 interface ModelLibraryProps {
@@ -28,10 +29,17 @@ export default function ModelLibrary({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [uploadingThumbId, setUploadingThumbId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const getPublicUrl = (storagePath: string) => {
     const { data } = supabase.storage.from("models").getPublicUrl(storagePath);
+    return data.publicUrl;
+  };
+
+  const getThumbnailUrl = (thumbnailPath: string) => {
+    const { data } = supabase.storage.from("thumbnails").getPublicUrl(thumbnailPath);
     return data.publicUrl;
   };
 
@@ -75,8 +83,37 @@ export default function ModelLibrary({
     setUploading(false);
   }, [models.length, onRefresh]);
 
+  const handleThumbnailUpload = async (modelId: string, file: File) => {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!["jpg", "jpeg", "png", "webp"].includes(ext ?? "")) {
+      return;
+    }
+    setUploadingThumbId(modelId);
+
+    // Remove old thumbnail if exists
+    const existing = models.find((m) => m.id === modelId);
+    if (existing?.thumbnail_path) {
+      await supabase.storage.from("thumbnails").remove([existing.thumbnail_path]);
+    }
+
+    const path = `${modelId}_${Date.now()}.${ext}`;
+    const { error: uploadErr } = await supabase.storage
+      .from("thumbnails")
+      .upload(path, file, { upsert: true });
+
+    if (!uploadErr) {
+      await supabase.from("models").update({ thumbnail_path: path }).eq("id", modelId);
+      onRefresh();
+    }
+
+    setUploadingThumbId(null);
+  };
+
   const handleDelete = async (model: ModelRecord) => {
     setDeletingId(model.id);
+    if (model.thumbnail_path) {
+      await supabase.storage.from("thumbnails").remove([model.thumbnail_path]);
+    }
     await supabase.storage.from("models").remove([model.storage_path]);
     await supabase.from("models").delete().eq("id", model.id);
     onRefresh();
@@ -147,19 +184,81 @@ export default function ModelLibrary({
             return (
               <div
                 key={model.id}
-                className="mx-2 mb-1 cursor-pointer transition-all duration-150"
+                className="mx-2 mb-2 cursor-pointer transition-all duration-150"
                 style={{
                   background: isSelected ? "hsl(var(--gold) / 0.08)" : "transparent",
-                  border: `1px solid ${isSelected ? "hsl(var(--gold) / 0.35)" : "transparent"}`,
+                  border: `1px solid ${isSelected ? "hsl(var(--gold) / 0.35)" : "hsl(var(--glass-border))"}`,
                 }}
                 onClick={() => onSelectModel(model, getPublicUrl(model.storage_path))}
               >
-                <div className="flex items-start gap-2 p-3">
-                  {isSelected ? (
-                    <CheckCircle2 size={11} style={{ color: "hsl(var(--gold))", marginTop: 2, flexShrink: 0 }} />
+                {/* Thumbnail */}
+                <div
+                  className="w-full relative overflow-hidden"
+                  style={{ height: 90, background: "hsl(var(--muted))" }}
+                >
+                  {model.thumbnail_path ? (
+                    <img
+                      src={getThumbnailUrl(model.thumbnail_path)}
+                      alt={model.name}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <Box size={11} style={{ color: "hsl(var(--muted-foreground))", marginTop: 2, flexShrink: 0 }} />
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Box size={22} style={{ color: "hsl(var(--muted-foreground))" }} />
+                    </div>
                   )}
+
+                  {/* Admin thumbnail upload overlay */}
+                  {isAdmin && (
+                    <>
+                      <input
+                        ref={(el) => { thumbInputRefs.current[model.id] = el; }}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleThumbnailUpload(model.id, f);
+                          e.target.value = "";
+                        }}
+                      />
+                      <button
+                        className="absolute bottom-1.5 right-1.5 px-2 py-1 flex items-center gap-1 transition-all"
+                        style={{
+                          background: "hsl(var(--muted) / 0.85)",
+                          border: "1px solid hsl(var(--glass-border))",
+                          color: "hsl(var(--gold))",
+                          fontSize: 9,
+                          backdropFilter: "blur(4px)",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          thumbInputRefs.current[model.id]?.click();
+                        }}
+                        title="Upload cover image"
+                        disabled={uploadingThumbId === model.id}
+                      >
+                        {uploadingThumbId === model.id
+                          ? <Loader2 size={9} className="animate-spin" />
+                          : <ImagePlus size={9} />
+                        }
+                        <span style={{ fontFamily: "'Epilogue', sans-serif" }}>
+                          {uploadingThumbId === model.id ? "..." : model.thumbnail_path ? "Change" : "Cover"}
+                        </span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* Selected indicator */}
+                  {isSelected && (
+                    <div className="absolute top-1.5 left-1.5">
+                      <CheckCircle2 size={13} style={{ color: "hsl(var(--gold))" }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Info row */}
+                <div className="flex items-center gap-2 px-2.5 py-2">
                   <div className="flex-1 min-w-0">
                     <div className="font-mono text-xs font-semibold truncate" style={{ color: "hsl(var(--foreground))" }}>
                       {model.name}
@@ -170,7 +269,7 @@ export default function ModelLibrary({
                   </div>
                   {isAdmin && (
                     <button
-                      className="p-1 hover:bg-red-500/10 transition-colors flex-shrink-0 ml-1"
+                      className="p-1 hover:bg-red-500/10 transition-colors flex-shrink-0"
                       style={{ color: "hsl(var(--destructive))" }}
                       onClick={(e) => { e.stopPropagation(); handleDelete(model); }}
                       disabled={deletingId === model.id}

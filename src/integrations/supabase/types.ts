@@ -69,6 +69,7 @@ export type Database = {
           is_public: boolean
           name: string
           storage_path: string
+          thumbnail_path: string | null
           uploaded_by: string | null
         }
         Insert: {
@@ -78,6 +79,7 @@ export type Database = {
           is_public?: boolean
           name: string
           storage_path: string
+          thumbnail_path?: string | null
           uploaded_by?: string | null
         }
         Update: {
@@ -87,6 +89,7 @@ export type Database = {
           is_public?: boolean
           name?: string
           storage_path?: string
+          thumbnail_path?: string | null
           uploaded_by?: string | null
         }
         Relationships: []
