@@ -1,49 +1,46 @@
 
-## Root Cause: Auth + Admin Race Condition
+## Root Cause: Two Bugs in AnnotationPin.tsx
 
-The stall happens because of a conflict between two concurrent async operations in `useAuth.tsx`:
+### Bug 1 — forwardRef Crashes the Canvas
 
-1. `supabase.auth.getSession()` — fetches the current session, then awaits `fetchIsAdmin()` (a database query), then calls `setLoading(false)`
-2. `supabase.auth.onAuthStateChange()` — fires **immediately on mount** (Supabase always fires `INITIAL_SESSION` event synchronously), and also calls `setLoading(false)` — but it also triggers `fetchIsAdmin()` for the same user at the same time
+The previous fix wrapped `AnnotationPin` in `forwardRef<THREE.Group, ...>`. React Three Fiber identifies scene components by checking whether they are plain functions. A `forwardRef`-wrapped component is an object `{ $$typeof: Symbol(react.forward_ref), render: fn }`, not a function — so R3F throws `Component3 is not a function` when it tries to call it during the render loop.
 
-This results in two simultaneous `fetchIsAdmin` calls racing each other. More critically, in some timing scenarios `onAuthStateChange` fires its `setLoading(false)` **before** `getSession`'s `fetchIsAdmin` resolves — causing the app to briefly show as non-admin, or the UI appears stuck waiting for the admin check.
+The ref was added to silence a console warning, but the warning was harmless. The fix is to revert `AnnotationPin` back to a plain named `export default function`.
 
-The real problem is that **both paths run in parallel** and both set state independently, leading to unpredictable ordering.
+### Bug 2 — Lightboxes Trapped Inside `<Html>`
 
-## The Fix
+The photo and video lightboxes are currently rendered as children of `<Html>` from `@react-three/drei`. The `<Html>` component creates a `<div>` that is absolutely positioned inside the Canvas's own overlay container, which:
+- Has `pointer-events: none` on ancestor elements in some configurations
+- Is clipped by the canvas bounds
+- Has a stacking context that prevents `position: fixed` from working relative to the viewport
 
-Supabase's own documentation recommends using `onAuthStateChange` as the **single source of truth** and NOT calling `getSession` separately in the same hook. The `INITIAL_SESSION` event from `onAuthStateChange` covers the initial load case.
+This is why the lightboxes appear to do nothing — they render, but are invisible or unclickable, trapped inside the canvas overlay.
 
-The corrected pattern:
-
-- Remove the separate `getSession()` call entirely
-- Use `onAuthStateChange` exclusively, which fires `INITIAL_SESSION` on mount with the current session (or null if not logged in)
-- Set `loading: false` only **after** `fetchIsAdmin` completes (for the initial event) or immediately (for sign-out)
-- This eliminates the race condition entirely — there's only one code path
+The fix is to use `ReactDOM.createPortal` to render the lightboxes directly into `document.body`, completely outside the canvas DOM subtree. The lightbox state (`lightboxOpen`, `videoOpen`) remains in the component, but the rendered JSX is portalled out.
 
 ## Files to Change
 
-### `src/hooks/useAuth.tsx`
+### `src/components/AnnotationPin.tsx`
 
-Remove the standalone `supabase.auth.getSession()` block. Rely solely on `onAuthStateChange`, which will fire with event `INITIAL_SESSION` on mount. The listener already handles `fetchIsAdmin` and `setLoading(false)` correctly.
+Two changes:
 
-The new logic flow:
+1. **Remove `forwardRef`**: Change back to a plain `export default function AnnotationPin(...)` — no ref forwarding needed. Remove `forwardRef` from the import.
 
-```text
-Mount
-  └─> onAuthStateChange fires with INITIAL_SESSION
-        ├─> session exists?
-        │     ├─> YES: fetchIsAdmin() → setIsAdmin() → setLoading(false)
-        │     └─> NO:  setIsAdmin(false) → setLoading(false)
-        └─> (subsequent SIGNED_IN / SIGNED_OUT events work identically)
+2. **Portal the lightboxes**: Import `ReactDOM` from `react-dom`. Move the Photo Lightbox and Video Lightbox `<div>` blocks out of `<Html>` and wrap them in `ReactDOM.createPortal(..., document.body)`. They remain conditionally rendered by the same state flags, but now mount into `document.body` directly, giving `position: fixed` the correct viewport context and full pointer-events access.
+
+The final structure looks like:
+
+```
+AnnotationPin (plain function, no forwardRef)
+  └─ <group>
+       ├─ <mesh> (sphere pin)
+       ├─ <mesh> (ring)
+       ├─ <Line>
+       └─ <Html>  ← only label, thumbnail, play button
+  
+  // Outside Canvas DOM — rendered via portal:
+  ReactDOM.createPortal(<PhotoLightbox />, document.body)
+  ReactDOM.createPortal(<VideoLightbox />, document.body)
 ```
 
-The `refreshAuth` function is kept as-is since it's used after `claim_admin` RPC to re-check the role without waiting for an auth event.
-
-## Technical Detail: Why This Works
-
-`onAuthStateChange` in Supabase JS v2 fires `INITIAL_SESSION` synchronously during the subscribe call, passing the cached session from `localStorage` if one exists. So there's no need for a separate `getSession()` — the listener handles both cases:
-- **Logged in**: fires with the session immediately, `fetchIsAdmin` runs once
-- **Logged out**: fires with `null` session, sets `isAdmin: false` and `loading: false` immediately (no DB call)
-
-This is also why the current code stalls — both `getSession` and the `INITIAL_SESSION` event race to call `fetchIsAdmin` and `setLoading(false)` at the same time.
+No database changes, no other files need editing.
