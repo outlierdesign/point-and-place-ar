@@ -36,13 +36,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Single source of truth: onAuthStateChange fires INITIAL_SESSION on mount
   useEffect(() => {
     let cancelled = false;
 
+    // 1. Immediately resolve the initial session to avoid spinner stall.
+    //    getSession() reads from localStorage synchronously on the JS side
+    //    and returns quickly — no network round-trip needed.
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (cancelled) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        const admin = await fetchIsAdmin(session.user.id);
+        if (!cancelled) setIsAdmin(admin);
+      }
+      if (!cancelled) setLoading(false);
+    });
+
+    // 2. Keep listening for sign-in / sign-out / token refresh events.
+    //    We skip INITIAL_SESSION here because getSession() already handled it.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (cancelled) return;
+        if (event === "INITIAL_SESSION") return; // handled above
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
