@@ -36,22 +36,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Initial load: get session once, resolve loading immediately
+  // Single source of truth: onAuthStateChange fires INITIAL_SESSION on mount
   useEffect(() => {
     let cancelled = false;
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (cancelled) return;
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        const admin = await fetchIsAdmin(session.user.id);
-        if (!cancelled) setIsAdmin(admin);
-      }
-      if (!cancelled) setLoading(false);
-    });
-
-    // Listen for subsequent auth changes (sign in / sign out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (cancelled) return;
@@ -63,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setIsAdmin(false);
         }
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     );
 
