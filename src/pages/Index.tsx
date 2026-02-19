@@ -379,7 +379,9 @@ export default function Index() {
           selectedId={selectedId}
           onSelect={setSelectedId}
           onDelete={deleteAnnotation}
-          onUpdate={updateAnnotation}
+          onUpdate={(id, label, desc, media_url, video_url) =>
+            updateAnnotation(id, label, desc, media_url, video_url)
+          }
           isPlacingMode={isPlacingMode}
           onTogglePlacingMode={() => setIsPlacingMode((v) => !v)}
           onClearAll={clearAll}
