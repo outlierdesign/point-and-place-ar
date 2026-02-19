@@ -7,6 +7,7 @@ interface AuthContextType {
   session: Session | null;
   isAdmin: boolean;
   loading: boolean;
+  adminLoading: boolean;
   signOut: () => Promise<void>;
   refreshAuth: () => Promise<void>;
 }
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   isAdmin: false,
   loading: true,
+  adminLoading: true,
   signOut: async () => {},
   refreshAuth: async () => {},
 });
@@ -25,7 +27,6 @@ async function fetchIsAdmin(userId: string): Promise<boolean> {
     const timeout = new Promise<false>((resolve) =>
       setTimeout(() => resolve(false), 8000)
     );
-    // Use the has_role RPC (SECURITY DEFINER) to bypass any RLS timing issues
     const query = supabase
       .rpc("has_role", { _user_id: userId, _role: "admin" })
       .then(({ data, error }) => {
@@ -44,38 +45,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [adminLoading, setAdminLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
-    // 1. Immediately resolve the initial session to unblock the UI.
-    //    getSession() reads from localStorage — no network round-trip.
-    //    We set loading:false BEFORE the admin check so the app renders
-    //    instantly; admin privileges update a moment later.
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (cancelled) return;
       setSession(session);
       setUser(session?.user ?? null);
-      if (!cancelled) setLoading(false); // unblock UI immediately
+      if (!cancelled) setLoading(false);
       if (session?.user) {
         const admin = await fetchIsAdmin(session.user.id);
-        if (!cancelled) setIsAdmin(admin);
+        if (!cancelled) {
+          setIsAdmin(admin);
+          setAdminLoading(false);
+        }
+      } else {
+        if (!cancelled) setAdminLoading(false);
       }
     });
 
-    // 2. Keep listening for sign-in / sign-out / token refresh events.
-    //    We skip INITIAL_SESSION here because getSession() already handled it.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (cancelled) return;
-        if (event === "INITIAL_SESSION") return; // handled above
+        if (event === "INITIAL_SESSION") return;
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
+          setAdminLoading(true);
           const admin = await fetchIsAdmin(session.user.id);
-          if (!cancelled) setIsAdmin(admin);
+          if (!cancelled) {
+            setIsAdmin(admin);
+            setAdminLoading(false);
+          }
         } else {
           setIsAdmin(false);
+          setAdminLoading(false);
         }
         if (!cancelled) setLoading(false);
       }
@@ -92,10 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(session);
     setUser(session?.user ?? null);
     if (session?.user) {
+      setAdminLoading(true);
       const admin = await fetchIsAdmin(session.user.id);
       setIsAdmin(admin);
+      setAdminLoading(false);
     } else {
       setIsAdmin(false);
+      setAdminLoading(false);
     }
   };
 
@@ -104,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, isAdmin, loading, signOut, refreshAuth }}>
+    <AuthContext.Provider value={{ user, session, isAdmin, loading, adminLoading, signOut, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );
