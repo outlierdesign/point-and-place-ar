@@ -34,6 +34,7 @@ export default function AnnotationPin({
 }: AnnotationPinProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
 
@@ -42,6 +43,12 @@ export default function AnnotationPin({
 
   const linePoints: [number, number, number][] = [[0, 0, 0], [0, -0.15, 0]];
 
+  const handlePinClick = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    onSelect(annotation.id);
+    setExpanded((v) => !v);
+  };
+
   return (
     <group position={annotation.position}>
       {/* Sphere pin */}
@@ -49,7 +56,7 @@ export default function AnnotationPin({
         ref={meshRef}
         onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
         onPointerOut={() => setHovered(false)}
-        onClick={(e) => { e.stopPropagation(); onSelect(annotation.id); }}
+        onClick={handlePinClick}
       >
         <sphereGeometry args={[0.04, 16, 16]} />
         <meshStandardMaterial
@@ -81,166 +88,238 @@ export default function AnnotationPin({
         opacity={0.5}
       />
 
-      {/*
-        Html bridges R3F → React DOM reconciler.
-        Portals inside here are handled by ReactDOM, not R3F,
-        so HTML elements like <button>, <iframe> work fine.
-      */}
+      {/* Collapsed badge — always visible, compact */}
       <Html
-        position={[0.1, 0.08, 0]}
-        distanceFactor={6}
+        position={[0.08, 0.06, 0]}
+        distanceFactor={5}
         zIndexRange={[100, 0]}
         occlude={false}
       >
-        {/* Tooltip label */}
         <div
-          className={`annotation-label fade-in ${selected ? "selected" : ""}`}
-          onClick={(e) => { e.stopPropagation(); onSelect(annotation.id); }}
-          style={{ userSelect: "none", maxWidth: 200, minWidth: 120 }}
+          onClick={(e) => { e.stopPropagation(); onSelect(annotation.id); setExpanded((v) => !v); }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+            background: "rgba(15, 25, 18, 0.82)",
+            border: `1px solid ${expanded ? goldBright : goldDim}`,
+            borderRadius: 3,
+            padding: "2px 6px",
+            cursor: "pointer",
+            userSelect: "none",
+            backdropFilter: "blur(4px)",
+            whiteSpace: "nowrap",
+            transition: "border-color 0.15s",
+          }}
         >
-          <div style={{
+          <span style={{
             color: "#C9954E",
             fontWeight: 600,
-            marginBottom: 4,
+            fontSize: 8,
             fontFamily: "'Red Hat Display', sans-serif",
-            wordBreak: "break-word",
-            whiteSpace: "normal",
-            lineHeight: 1.3,
+            letterSpacing: "0.03em",
+            maxWidth: 100,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}>
             {annotation.label}
-          </div>
-
-          {annotation.description && (
-            <div style={{
-              color: "hsl(42 30% 68%)",
-              fontSize: 10,
-              wordBreak: "break-word",
-              whiteSpace: "normal",
-              lineHeight: 1.4,
-              marginBottom: (annotation.media_url || annotation.video_url) ? 6 : 0,
-            }}>
-              {annotation.description}
-            </div>
-          )}
-
-          {annotation.media_url && (
-            <div style={{ marginTop: 4 }}>
-              <img
-                src={annotation.media_url}
-                alt="Annotation media"
-                style={{
-                  width: "100%",
-                  maxHeight: 90,
-                  objectFit: "cover",
-                  cursor: "pointer",
-                  border: "1px solid #7a572080",
-                  display: "block",
-                }}
-                onClick={(e) => { e.stopPropagation(); setLightboxOpen(true); }}
-              />
-            </div>
-          )}
-
-          {annotation.video_url && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }}
-              style={{
-                marginTop: 6,
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                background: "rgba(167,120,43,0.18)",
-                border: "1px solid #A7782B60",
-                color: "#C9954E",
-                fontFamily: "'Red Hat Display', sans-serif",
-                fontSize: 9,
-                padding: "3px 7px",
-                cursor: "pointer",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                width: "100%",
-                justifyContent: "center",
-              }}
-            >
-              ▶ Play Video
-            </button>
-          )}
+          </span>
+          <span style={{
+            color: expanded ? "#C9954E" : "#7a5720",
+            fontSize: 8,
+            lineHeight: 1,
+            fontWeight: 700,
+            marginLeft: 1,
+          }}>
+            {expanded ? "×" : "+"}
+          </span>
         </div>
+      </Html>
 
-        {/* Photo Lightbox — portal lives inside <Html> so ReactDOM handles it */}
-        {lightboxOpen && annotation.media_url && ReactDOM.createPortal(
+      {/* Expanded card — only when expanded */}
+      {expanded && (
+        <Html
+          position={[0.12, 0.14, 0]}
+          distanceFactor={5}
+          zIndexRange={[200, 0]}
+          occlude={false}
+        >
           <div
             style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(10,20,14,0.92)",
-              zIndex: 9999,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              background: "rgba(12, 22, 15, 0.92)",
+              border: "1px solid #A7782B60",
+              borderRadius: 4,
+              padding: "7px 8px",
+              maxWidth: 180,
+              minWidth: 130,
               backdropFilter: "blur(6px)",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+              userSelect: "none",
             }}
-            onClick={() => setLightboxOpen(false)}
           >
-            <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
-              <img
-                src={annotation.media_url}
-                alt="Full size"
-                style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", display: "block" }}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <button
-                onClick={() => setLightboxOpen(false)}
-                style={{
-                  position: "absolute", top: -12, right: -12,
-                  background: "#192C20", border: "1px solid #A7782B",
-                  color: "#C9954E", width: 28, height: 28,
-                  cursor: "pointer", fontSize: 14, lineHeight: 1,
-                }}
-              >×</button>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {/* Video Lightbox — portal lives inside <Html> so ReactDOM handles it */}
-        {videoOpen && annotation.video_url && ReactDOM.createPortal(
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(10,20,14,0.92)",
-              zIndex: 9999,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backdropFilter: "blur(6px)",
-            }}
-            onClick={() => setVideoOpen(false)}
-          >
-            <div style={{ position: "relative", width: "80vw", maxWidth: 900 }}>
-              <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
-                <iframe
-                  src={getVideoEmbed(annotation.video_url)}
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-                  allow="autoplay; fullscreen"
-                  title="Video"
-                />
+            {/* Header row: label + close */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 4, marginBottom: 4 }}>
+              <div style={{
+                color: "#C9954E",
+                fontWeight: 600,
+                fontSize: 10,
+                fontFamily: "'Red Hat Display', sans-serif",
+                wordBreak: "break-word",
+                whiteSpace: "normal",
+                lineHeight: 1.3,
+                flex: 1,
+              }}>
+                {annotation.label}
               </div>
               <button
-                onClick={() => setVideoOpen(false)}
+                onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
                 style={{
-                  position: "absolute", top: -12, right: -12,
-                  background: "#192C20", border: "1px solid #A7782B",
-                  color: "#C9954E", width: 28, height: 28,
-                  cursor: "pointer", fontSize: 14, lineHeight: 1,
+                  background: "none",
+                  border: "none",
+                  color: "#7a5720",
+                  fontSize: 12,
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  padding: "0 1px",
+                  flexShrink: 0,
                 }}
               >×</button>
             </div>
-          </div>,
-          document.body
-        )}
-      </Html>
+
+            {annotation.description && (
+              <div style={{
+                color: "hsl(42 30% 60%)",
+                fontSize: 9,
+                wordBreak: "break-word",
+                whiteSpace: "normal",
+                lineHeight: 1.4,
+                marginBottom: (annotation.media_url || annotation.video_url) ? 5 : 0,
+              }}>
+                {annotation.description}
+              </div>
+            )}
+
+            {annotation.media_url && (
+              <div style={{ marginTop: 4 }}>
+                <img
+                  src={annotation.media_url}
+                  alt="Annotation media"
+                  style={{
+                    width: "100%",
+                    maxHeight: 80,
+                    objectFit: "cover",
+                    cursor: "pointer",
+                    border: "1px solid #7a572080",
+                    display: "block",
+                    borderRadius: 2,
+                  }}
+                  onClick={(e) => { e.stopPropagation(); setLightboxOpen(true); }}
+                />
+              </div>
+            )}
+
+            {annotation.video_url && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }}
+                style={{
+                  marginTop: 5,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  background: "rgba(167,120,43,0.18)",
+                  border: "1px solid #A7782B60",
+                  color: "#C9954E",
+                  fontFamily: "'Red Hat Display', sans-serif",
+                  fontSize: 8,
+                  padding: "3px 7px",
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  width: "100%",
+                  justifyContent: "center",
+                  borderRadius: 2,
+                }}
+              >
+                ▶ Play Video
+              </button>
+            )}
+
+            {/* Photo Lightbox portal */}
+            {lightboxOpen && annotation.media_url && ReactDOM.createPortal(
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(10,20,14,0.92)",
+                  zIndex: 9999,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backdropFilter: "blur(6px)",
+                }}
+                onClick={() => setLightboxOpen(false)}
+              >
+                <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
+                  <img
+                    src={annotation.media_url}
+                    alt="Full size"
+                    style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", display: "block" }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <button
+                    onClick={() => setLightboxOpen(false)}
+                    style={{
+                      position: "absolute", top: -12, right: -12,
+                      background: "#192C20", border: "1px solid #A7782B",
+                      color: "#C9954E", width: 28, height: 28,
+                      cursor: "pointer", fontSize: 14, lineHeight: 1,
+                    }}
+                  >×</button>
+                </div>
+              </div>,
+              document.body
+            )}
+
+            {/* Video Lightbox portal */}
+            {videoOpen && annotation.video_url && ReactDOM.createPortal(
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(10,20,14,0.92)",
+                  zIndex: 9999,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backdropFilter: "blur(6px)",
+                }}
+                onClick={() => setVideoOpen(false)}
+              >
+                <div style={{ position: "relative", width: "80vw", maxWidth: 900 }}>
+                  <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+                    <iframe
+                      src={getVideoEmbed(annotation.video_url)}
+                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                      allow="autoplay; fullscreen"
+                      title="Video"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setVideoOpen(false)}
+                    style={{
+                      position: "absolute", top: -12, right: -12,
+                      background: "#192C20", border: "1px solid #A7782B",
+                      color: "#C9954E", width: 28, height: 28,
+                      cursor: "pointer", fontSize: 14, lineHeight: 1,
+                    }}
+                  >×</button>
+                </div>
+              </div>,
+              document.body
+            )}
+          </div>
+        </Html>
+      )}
     </group>
   );
 }
