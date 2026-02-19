@@ -154,13 +154,18 @@ export default function Index() {
   const handleClaimAdmin = async () => {
     setClaiming(true);
     setClaimError(null);
-    const { error } = await supabase.rpc("claim_admin" as never);
-    if (error) {
-      setClaimError(error.message);
-    } else {
-      await refreshAuth();
+    try {
+      const { error } = await supabase.rpc("claim_admin" as never);
+      if (error) {
+        setClaimError(error.message);
+      } else {
+        await refreshAuth();
+      }
+    } catch (e: unknown) {
+      setClaimError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setClaiming(false);
     }
-    setClaiming(false);
   };
 
   const handleAR = async () => {
