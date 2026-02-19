@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, ShieldCheck, Loader2 } from "lucide-react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer, { DEFAULT_MODEL_URL } from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
@@ -9,12 +9,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModels } from "@/hooks/useModels";
 import { useAnnotations } from "@/hooks/useAnnotations";
 import { ModelRecord } from "@/components/ModelLibrary";
-import { supabase } from "@/integrations/supabase/client";
 
 const DEFAULT_MODEL_NAME = "DamagedHelmet.glTF";
 
 export default function Index() {
-  const { user, isAdmin, loading: authLoading, signOut, refreshAuth } = useAuth();
+  const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const { models, loading: modelsLoading, refetch: refetchModels } = useModels();
 
@@ -26,9 +25,6 @@ export default function Index() {
   const [newDesc, setNewDesc] = useState("");
   const [arSupported, setArSupported] = useState<boolean | null>(null);
 
-  // Claim admin state
-  const [claiming, setClaiming] = useState(false);
-  const [claimError, setClaimError] = useState<string | null>(null);
 
   // Model display state
   const [modelUrl, setModelUrl] = useState(DEFAULT_MODEL_URL);
@@ -151,22 +147,6 @@ export default function Index() {
     setPendingPos(null);
   };
 
-  const handleClaimAdmin = async () => {
-    setClaiming(true);
-    setClaimError(null);
-    try {
-      const { error } = await supabase.rpc("claim_admin" as never);
-      if (error) {
-        setClaimError(error.message);
-      } else {
-        await refreshAuth();
-      }
-    } catch (e: unknown) {
-      setClaimError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setClaiming(false);
-    }
-  };
 
   const handleAR = async () => {
     if (!arSupported) return;
@@ -351,25 +331,6 @@ export default function Index() {
           onRefresh={refetchModels}
         />
 
-        {/* Claim Admin — first-run only */}
-        {user && !isAdmin && (
-          <div className="glass-panel p-3 space-y-2">
-            <p className="font-mono text-xs leading-relaxed" style={{ color: "hsl(var(--muted-foreground))", fontSize: 10 }}>
-              No admin yet? Claim access to upload models.
-            </p>
-            {claimError && (
-              <p className="font-mono text-xs" style={{ color: "hsl(var(--destructive))", fontSize: 10 }}>{claimError}</p>
-            )}
-            <button
-              className="btn-cyan w-full py-2 flex items-center justify-center gap-2 text-xs"
-              onClick={handleClaimAdmin}
-              disabled={claiming}
-            >
-              {claiming ? <Loader2 size={11} className="animate-spin" /> : <ShieldCheck size={11} />}
-              {claiming ? "Claiming..." : "Claim Admin Access"}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Right panel — Annotations */}
