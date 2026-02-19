@@ -21,13 +21,22 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 async function fetchIsAdmin(userId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  return !!data;
+  try {
+    const timeout = new Promise<false>((resolve) =>
+      setTimeout(() => resolve(false), 5000)
+    );
+    const query = supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle()
+      .then(({ data }) => !!data);
+
+    return await Promise.race([query, timeout]);
+  } catch {
+    return false;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -39,18 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    // 1. Immediately resolve the initial session to avoid spinner stall.
-    //    getSession() reads from localStorage synchronously on the JS side
-    //    and returns quickly — no network round-trip needed.
+    // 1. Immediately resolve the initial session to unblock the UI.
+    //    getSession() reads from localStorage — no network round-trip.
+    //    We set loading:false BEFORE the admin check so the app renders
+    //    instantly; admin privileges update a moment later.
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (cancelled) return;
       setSession(session);
       setUser(session?.user ?? null);
+      if (!cancelled) setLoading(false); // unblock UI immediately
       if (session?.user) {
         const admin = await fetchIsAdmin(session.user.id);
         if (!cancelled) setIsAdmin(admin);
       }
-      if (!cancelled) setLoading(false);
     });
 
     // 2. Keep listening for sign-in / sign-out / token refresh events.
