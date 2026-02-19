@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 const DEFAULT_MODEL_NAME = "DamagedHelmet.glTF";
 
 export default function Index() {
-  const { user, isAdmin, loading: authLoading, signOut } = useAuth();
+  const { user, isAdmin, loading: authLoading, signOut, refreshAuth } = useAuth();
   const navigate = useNavigate();
   const { models, loading: modelsLoading, refetch: refetchModels } = useModels();
 
@@ -158,8 +158,7 @@ export default function Index() {
     if (error) {
       setClaimError(error.message);
     } else {
-      // Refresh page so auth hook re-checks role
-      window.location.reload();
+      await refreshAuth();
     }
     setClaiming(false);
   };
