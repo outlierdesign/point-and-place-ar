@@ -90,12 +90,12 @@ export default function ModelLibrary({
   };
 
   return (
-    <div className="glass-panel flex flex-col h-full rounded-lg overflow-hidden">
+    <div className="glass-panel flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b" style={{ borderColor: "hsl(var(--glass-border))" }}>
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-2 h-2 rounded-full" style={{ background: "hsl(var(--cyan))", boxShadow: "0 0 6px hsl(var(--cyan))" }} />
-          <span className="font-mono text-xs font-semibold tracking-widest uppercase" style={{ color: "hsl(var(--cyan))" }}>
+          <div className="w-2 h-2" style={{ background: "hsl(var(--gold))" }} />
+          <span className="font-mono text-xs font-semibold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>
             Models
           </span>
           <span className="ml-auto font-mono text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>
@@ -113,8 +113,8 @@ export default function ModelLibrary({
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }}
             />
             <button
-              className={`w-full py-2 px-3 rounded flex items-center gap-2 transition-all duration-200 ${
-                uploading || models.length >= 6 ? "opacity-50 cursor-not-allowed btn-ghost-cyan" : "btn-ghost-cyan"
+              className={`w-full py-2 px-3 flex items-center gap-2 transition-all duration-200 ${
+                uploading || models.length >= 6 ? "opacity-50 cursor-not-allowed btn-ghost-cyan" : "btn-cyan"
               }`}
               onClick={() => !uploading && models.length < 6 && fileInputRef.current?.click()}
               disabled={uploading || models.length >= 6}
@@ -124,7 +124,7 @@ export default function ModelLibrary({
             </button>
 
             {uploadError && (
-              <div className="mt-2 font-mono text-xs px-2 py-1.5 rounded fade-in" style={{ color: "hsl(var(--destructive))", background: "hsl(var(--destructive) / 0.1)", border: "1px solid hsl(var(--destructive) / 0.3)" }}>
+              <div className="mt-2 font-mono text-xs px-2 py-1.5 fade-in" style={{ color: "hsl(var(--destructive))", background: "hsl(var(--destructive) / 0.1)", border: "1px solid hsl(var(--destructive) / 0.3)" }}>
                 {uploadError}
               </div>
             )}
@@ -147,16 +147,16 @@ export default function ModelLibrary({
             return (
               <div
                 key={model.id}
-                className="mx-2 mb-1 rounded cursor-pointer transition-all duration-150"
+                className="mx-2 mb-1 cursor-pointer transition-all duration-150"
                 style={{
-                  background: isSelected ? "hsl(185 100% 50% / 0.08)" : "transparent",
-                  border: `1px solid ${isSelected ? "hsl(185 100% 50% / 0.3)" : "transparent"}`,
+                  background: isSelected ? "hsl(var(--gold) / 0.08)" : "transparent",
+                  border: `1px solid ${isSelected ? "hsl(var(--gold) / 0.35)" : "transparent"}`,
                 }}
                 onClick={() => onSelectModel(model, getPublicUrl(model.storage_path))}
               >
                 <div className="flex items-start gap-2 p-3">
                   {isSelected ? (
-                    <CheckCircle2 size={11} style={{ color: "hsl(var(--cyan))", marginTop: 2, flexShrink: 0 }} />
+                    <CheckCircle2 size={11} style={{ color: "hsl(var(--gold))", marginTop: 2, flexShrink: 0 }} />
                   ) : (
                     <Box size={11} style={{ color: "hsl(var(--muted-foreground))", marginTop: 2, flexShrink: 0 }} />
                   )}
@@ -170,7 +170,7 @@ export default function ModelLibrary({
                   </div>
                   {isAdmin && (
                     <button
-                      className="p-1 rounded hover:bg-red-500/10 transition-colors flex-shrink-0 ml-1"
+                      className="p-1 hover:bg-red-500/10 transition-colors flex-shrink-0 ml-1"
                       style={{ color: "hsl(var(--destructive))" }}
                       onClick={(e) => { e.stopPropagation(); handleDelete(model); }}
                       disabled={deletingId === model.id}

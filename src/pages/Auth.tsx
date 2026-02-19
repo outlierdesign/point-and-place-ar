@@ -37,24 +37,19 @@ export default function Auth() {
   };
 
   return (
-    <div
-      className="w-screen h-screen flex items-center justify-center"
-      style={{ background: "hsl(var(--background))" }}
-    >
-      <div className="scanline absolute inset-0 pointer-events-none z-10" />
-
-      <div className="glass-panel rounded-2xl p-8 w-full max-w-sm fade-in z-20">
+    <div className="w-screen h-screen flex items-center justify-center" style={{ background: "hsl(var(--background))" }}>
+      <div className="glass-panel p-8 w-full max-w-sm fade-in">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-8">
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: "hsl(var(--cyan) / 0.15)", border: "1px solid hsl(var(--cyan) / 0.4)" }}
+            className="w-8 h-8 flex items-center justify-center"
+            style={{ background: "hsl(var(--gold) / 0.15)", border: "1px solid hsl(var(--gold) / 0.4)" }}
           >
-            <Layers size={16} style={{ color: "hsl(var(--cyan))" }} />
+            <Layers size={16} style={{ color: "hsl(var(--gold))" }} />
           </div>
           <div>
             <div className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--foreground))" }}>
-              AR Model Viewer
+              Acres Ireland
             </div>
             <div className="font-mono text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>
               {mode === "login" ? "Sign in to your account" : "Create an account"}
@@ -76,13 +71,13 @@ export default function Auth() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-transparent border rounded-lg pl-8 pr-3 py-2.5 font-mono text-sm outline-none transition-colors"
+                className="w-full bg-transparent border pl-8 pr-3 py-2.5 font-mono text-sm outline-none transition-colors"
                 style={{
                   borderColor: "hsl(var(--glass-border))",
                   color: "hsl(var(--foreground))",
-                  fontSize: 12,
+                  fontSize: 13,
                 }}
-                onFocus={(e) => (e.target.style.borderColor = "hsl(var(--cyan))")}
+                onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
                 onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
               />
             </div>
@@ -101,13 +96,13 @@ export default function Auth() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-transparent border rounded-lg pl-8 pr-9 py-2.5 font-mono text-sm outline-none transition-colors"
+                className="w-full bg-transparent border pl-8 pr-9 py-2.5 font-mono text-sm outline-none transition-colors"
                 style={{
                   borderColor: "hsl(var(--glass-border))",
                   color: "hsl(var(--foreground))",
-                  fontSize: 12,
+                  fontSize: 13,
                 }}
-                onFocus={(e) => (e.target.style.borderColor = "hsl(var(--cyan))")}
+                onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
                 onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
               />
               <button
@@ -122,13 +117,13 @@ export default function Auth() {
           </div>
 
           {error && (
-            <div className="font-mono text-xs rounded-lg px-3 py-2 fade-in" style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))", border: "1px solid hsl(var(--destructive) / 0.3)" }}>
+            <div className="font-mono text-xs px-3 py-2 fade-in" style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))", border: "1px solid hsl(var(--destructive) / 0.3)" }}>
               {error}
             </div>
           )}
 
           {message && (
-            <div className="font-mono text-xs rounded-lg px-3 py-2 fade-in" style={{ background: "hsl(var(--cyan) / 0.1)", color: "hsl(var(--cyan))", border: "1px solid hsl(var(--cyan) / 0.3)" }}>
+            <div className="font-mono text-xs px-3 py-2 fade-in" style={{ background: "hsl(var(--gold) / 0.1)", color: "hsl(var(--gold))", border: "1px solid hsl(var(--gold) / 0.3)" }}>
               {message}
             </div>
           )}
@@ -136,7 +131,7 @@ export default function Auth() {
           <button
             type="submit"
             disabled={loading}
-            className="btn-cyan w-full py-2.5 rounded-lg mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-cyan w-full py-2.5 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "..." : mode === "login" ? "Sign In" : "Create Account"}
           </button>
@@ -147,7 +142,7 @@ export default function Auth() {
             onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); setMessage(null); }}
             className="font-mono text-xs transition-colors"
             style={{ color: "hsl(var(--muted-foreground))" }}
-            onMouseOver={(e) => (e.currentTarget.style.color = "hsl(var(--cyan))")}
+            onMouseOver={(e) => (e.currentTarget.style.color = "hsl(var(--gold))")}
             onMouseOut={(e) => (e.currentTarget.style.color = "hsl(var(--muted-foreground))")}
           >
             {mode === "login" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}

@@ -57,9 +57,9 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        cyan: {
-          DEFAULT: "hsl(var(--cyan))",
-          dim: "hsl(var(--cyan-dim))",
+        gold: {
+          DEFAULT: "hsl(var(--gold))",
+          dim: "hsl(var(--gold-dim))",
         },
         glass: {
           bg: "hsl(var(--glass-bg))",

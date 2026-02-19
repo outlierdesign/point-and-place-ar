@@ -102,8 +102,8 @@ export default function Embed() {
     return (
       <div className="w-screen h-screen flex items-center justify-center" style={{ background: "hsl(var(--background))" }}>
         <div className="flex flex-col items-center gap-3">
-          <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--cyan))", borderTopColor: "transparent" }} />
-          <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--cyan))" }}>LOADING...</div>
+          <div className="w-6 h-6 border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--gold))", borderTopColor: "transparent" }} />
+          <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--gold))" }}>LOADING...</div>
         </div>
       </div>
     );
@@ -111,8 +111,6 @@ export default function Embed() {
 
   return (
     <div className="w-screen h-screen flex overflow-hidden relative" style={{ background: "hsl(var(--background))" }}>
-      <div className="scanline absolute inset-0 pointer-events-none z-10" />
-
       {/* 3D Canvas */}
       <div className="absolute inset-0 z-0">
         <Suspense fallback={<div />}>
@@ -131,15 +129,15 @@ export default function Embed() {
 
       {/* Minimal top bar */}
       <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between">
-        <div className="glass-panel flex items-center gap-2 px-3 py-1.5 rounded-lg">
-          <Layers size={12} style={{ color: "hsl(var(--cyan))" }} />
+        <div className="glass-panel flex items-center gap-2 px-3 py-1.5">
+          <Layers size={12} style={{ color: "hsl(var(--gold))" }} />
           <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--foreground))" }}>
             {model?.name ?? "Model Viewer"}
           </span>
         </div>
 
         <button
-          className={`glass-panel px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-mono text-xs transition-all duration-200 ${isPlacingMode ? "btn-cyan" : "btn-ghost-cyan"}`}
+          className={`glass-panel px-3 py-1.5 flex items-center gap-1.5 font-mono text-xs transition-all duration-200 ${isPlacingMode ? "btn-cyan" : "btn-ghost-cyan"}`}
           onClick={() => setIsPlacingMode((v) => !v)}
         >
           <span>{isPlacingMode ? "Click to place pin..." : "Add Pin"}</span>
@@ -147,47 +145,47 @@ export default function Embed() {
       </div>
 
       {/* Controls */}
-      <div className="absolute bottom-3 left-3 z-20 glass-panel px-3 py-2 rounded-lg">
+      <div className="absolute bottom-3 left-3 z-20 glass-panel px-3 py-2">
         <div className="font-mono space-y-0.5" style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Drag</span> — Orbit</div>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Scroll</span> — Zoom</div>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Right drag</span> — Pan</div>
+          <div><span style={{ color: "hsl(var(--gold))" }}>Drag</span> — Orbit</div>
+          <div><span style={{ color: "hsl(var(--gold))" }}>Scroll</span> — Zoom</div>
+          <div><span style={{ color: "hsl(var(--gold))" }}>Right drag</span> — Pan</div>
         </div>
       </div>
 
       {/* Pending annotation modal */}
       {pendingPos && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ background: "hsl(220 20% 4% / 0.6)", backdropFilter: "blur(4px)" }}>
-          <div className="glass-panel rounded-xl p-6 w-80 fade-in space-y-4">
+        <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ background: "hsl(var(--muted) / 0.6)", backdropFilter: "blur(4px)" }}>
+          <div className="glass-panel p-6 w-80 fade-in space-y-4">
             <div className="flex items-center gap-2">
-              <Info size={14} style={{ color: "hsl(var(--cyan))" }} />
-              <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--cyan))" }}>
+              <Info size={14} style={{ color: "hsl(var(--gold))" }} />
+              <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>
                 New Annotation
               </span>
             </div>
             <input
-              className="w-full bg-transparent border rounded px-3 py-2 font-mono text-sm outline-none"
-              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--foreground))", fontSize: 12 }}
-              placeholder="Label (e.g. Visor, Damage Point)"
+              className="w-full bg-transparent border px-3 py-2 font-mono text-sm outline-none"
+              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--foreground))", fontSize: 13 }}
+              placeholder="Label (e.g. Field boundary, Gate)"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--cyan))")}
+              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
               onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
               autoFocus
               onKeyDown={(e) => e.key === "Enter" && confirmAnnotation()}
             />
             <textarea
-              className="w-full bg-transparent border rounded px-3 py-2 font-mono text-xs outline-none resize-none"
-              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(200, 15%, 65%)", fontSize: 11, height: 56 }}
+              className="w-full bg-transparent border px-3 py-2 font-mono text-xs outline-none resize-none"
+              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 11, height: 56 }}
               placeholder="Description (optional)"
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--cyan))")}
+              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
               onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
             />
             <div className="flex gap-2">
-              <button className="btn-cyan flex-1 py-2 rounded-md" onClick={confirmAnnotation}>Place Pin</button>
-              <button className="btn-ghost-cyan px-4 py-2 rounded-md" onClick={() => setPendingPos(null)}>
+              <button className="btn-cyan flex-1 py-2" onClick={confirmAnnotation}>Place Pin</button>
+              <button className="btn-ghost-cyan px-4 py-2" onClick={() => setPendingPos(null)}>
                 <X size={12} />
               </button>
             </div>
