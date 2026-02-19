@@ -24,6 +24,10 @@ export default function AnnotationPin({
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
 
+  // Gold: #A7782B  dimmed: #7a5720
+  const goldBright = "#A7782B";
+  const goldDim = "#7a5720";
+
   const linePoints: [number, number, number][] = [[0, 0, 0], [0, -0.15, 0]];
 
   return (
@@ -37,11 +41,11 @@ export default function AnnotationPin({
       >
         <sphereGeometry args={[0.04, 16, 16]} />
         <meshStandardMaterial
-          color={selected ? "#00f5ff" : hovered ? "#00d4ff" : "#00a8cc"}
-          emissive={selected ? "#00f5ff" : hovered ? "#00b0cc" : "#004455"}
-          emissiveIntensity={selected ? 1.5 : hovered ? 1 : 0.5}
-          roughness={0.1}
-          metalness={0.8}
+          color={selected ? goldBright : hovered ? goldBright : goldDim}
+          emissive={selected ? goldBright : hovered ? goldDim : "#3d2b0d"}
+          emissiveIntensity={selected ? 1.2 : hovered ? 0.8 : 0.4}
+          roughness={0.3}
+          metalness={0.7}
         />
       </mesh>
 
@@ -49,9 +53,9 @@ export default function AnnotationPin({
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.055, 0.07, 32]} />
         <meshBasicMaterial
-          color={selected ? "#00f5ff" : "#00a8cc"}
+          color={selected ? goldBright : goldDim}
           transparent
-          opacity={selected ? 0.8 : 0.4}
+          opacity={selected ? 0.85 : 0.4}
           side={THREE.DoubleSide}
         />
       </mesh>
@@ -59,7 +63,7 @@ export default function AnnotationPin({
       {/* Vertical line down to surface */}
       <Line
         points={linePoints}
-        color="#00a8cc"
+        color={goldDim}
         lineWidth={1}
         transparent
         opacity={0.5}
@@ -77,11 +81,11 @@ export default function AnnotationPin({
           onClick={(e) => { e.stopPropagation(); onSelect(annotation.id); }}
           style={{ userSelect: "none" }}
         >
-          <div style={{ color: "hsl(185, 100%, 60%)", fontWeight: 600, marginBottom: 2 }}>
+          <div style={{ color: "#C9954E", fontWeight: 600, marginBottom: 2, fontFamily: "'Red Hat Display', sans-serif" }}>
             #{annotation.id.slice(-3).toUpperCase()} {annotation.label}
           </div>
           {annotation.description && (
-            <div style={{ color: "hsl(200, 20%, 65%)", fontSize: 10, maxWidth: 160 }}>
+            <div style={{ color: "hsl(42 30% 68%)", fontSize: 10, maxWidth: 160 }}>
               {annotation.description}
             </div>
           )}

@@ -41,12 +41,12 @@ export default function AnnotationPanel({
   };
 
   return (
-    <div className="glass-panel flex flex-col h-full rounded-lg overflow-hidden">
+    <div className="glass-panel flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b" style={{ borderColor: "hsl(var(--glass-border))" }}>
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-2 h-2 rounded-full" style={{ background: "hsl(var(--cyan))", boxShadow: "0 0 6px hsl(var(--cyan))" }} />
-          <span className="font-mono text-xs font-semibold tracking-widest uppercase" style={{ color: "hsl(var(--cyan))" }}>
+          <div className="w-2 h-2" style={{ background: "hsl(var(--gold))" }} />
+          <span className="font-mono text-xs font-semibold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>
             Annotations
           </span>
           <span className="ml-auto font-mono text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>
@@ -56,7 +56,7 @@ export default function AnnotationPanel({
 
         <button
           onClick={onTogglePlacingMode}
-          className={`w-full py-2 px-3 rounded flex items-center gap-2 transition-all duration-200 ${
+          className={`w-full py-2 px-3 flex items-center gap-2 transition-all duration-200 ${
             isPlacingMode ? "btn-cyan" : "btn-ghost-cyan"
           }`}
         >
@@ -81,23 +81,22 @@ export default function AnnotationPanel({
           annotations.map((ann) => (
             <div
               key={ann.id}
-              className={`mx-2 mb-1 rounded cursor-pointer transition-all duration-150 ${
+              className={`mx-2 mb-1 cursor-pointer transition-all duration-150 ${
                 selectedId === ann.id ? "fade-in" : ""
               }`}
               style={{
-                background: selectedId === ann.id ? "hsl(185 100% 50% / 0.08)" : "transparent",
-                border: `1px solid ${selectedId === ann.id ? "hsl(185 100% 50% / 0.3)" : "transparent"}`,
+                background: selectedId === ann.id ? "hsl(var(--gold) / 0.08)" : "transparent",
+                border: `1px solid ${selectedId === ann.id ? "hsl(var(--gold) / 0.35)" : "transparent"}`,
               }}
               onClick={() => onSelect(ann.id)}
             >
               {editingId === ann.id ? (
                 <div className="p-3 space-y-2">
                   <input
-                    className="w-full bg-transparent border rounded px-2 py-1 font-mono text-xs outline-none focus:border-cyan-400"
+                    className="w-full bg-transparent border px-2 py-1 font-mono text-xs outline-none"
                     style={{
                       borderColor: "hsl(var(--glass-border))",
                       color: "hsl(var(--foreground))",
-                      fontFamily: "'JetBrains Mono', monospace",
                       fontSize: 11,
                     }}
                     value={editLabel}
@@ -107,11 +106,10 @@ export default function AnnotationPanel({
                     autoFocus
                   />
                   <textarea
-                    className="w-full bg-transparent border rounded px-2 py-1 font-mono text-xs outline-none resize-none"
+                    className="w-full bg-transparent border px-2 py-1 font-mono text-xs outline-none resize-none"
                     style={{
                       borderColor: "hsl(var(--glass-border))",
-                      color: "hsl(200, 15%, 65%)",
-                      fontFamily: "'JetBrains Mono', monospace",
+                      color: "hsl(var(--muted-foreground))",
                       fontSize: 10,
                       height: 52,
                     }}
@@ -122,13 +120,13 @@ export default function AnnotationPanel({
                   />
                   <div className="flex gap-2">
                     <button
-                      className="btn-cyan px-3 py-1 rounded text-xs flex-1"
+                      className="btn-cyan px-3 py-1 text-xs flex-1"
                       onClick={(e) => { e.stopPropagation(); saveEdit(); }}
                     >
                       Save
                     </button>
                     <button
-                      className="btn-ghost-cyan px-3 py-1 rounded text-xs"
+                      className="btn-ghost-cyan px-3 py-1 text-xs"
                       onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
                     >
                       Cancel
@@ -137,7 +135,7 @@ export default function AnnotationPanel({
                 </div>
               ) : (
                 <div className="flex items-start gap-2 p-3">
-                  <Tag size={11} style={{ color: "hsl(var(--cyan))", marginTop: 2, flexShrink: 0 }} />
+                  <Tag size={11} style={{ color: "hsl(var(--gold))", marginTop: 2, flexShrink: 0 }} />
                   <div className="flex-1 min-w-0">
                     <div className="font-mono text-xs font-semibold truncate" style={{ color: "hsl(var(--foreground))" }}>
                       {ann.label || "Untitled"}
@@ -153,15 +151,15 @@ export default function AnnotationPanel({
                   </div>
                   <div className="flex gap-1 ml-1 opacity-0 group-hover:opacity-100 flex-shrink-0">
                     <button
-                      className="p-1 rounded hover:bg-white/5 transition-colors"
-                      style={{ color: "hsl(var(--cyan))" }}
+                      className="p-1 transition-colors hover:bg-white/5"
+                      style={{ color: "hsl(var(--gold))" }}
                       onClick={(e) => { e.stopPropagation(); startEdit(ann); }}
                       title="Edit"
                     >
                       <ChevronRight size={12} />
                     </button>
                     <button
-                      className="p-1 rounded hover:bg-red-500/10 transition-colors"
+                      className="p-1 transition-colors hover:bg-red-500/10"
                       style={{ color: "hsl(var(--destructive))" }}
                       onClick={(e) => { e.stopPropagation(); onDelete(ann.id); }}
                       title="Delete"
@@ -180,7 +178,7 @@ export default function AnnotationPanel({
       {annotations.length > 0 && (
         <div className="px-4 py-3 border-t" style={{ borderColor: "hsl(var(--glass-border))" }}>
           <button
-            className="btn-ghost-cyan w-full py-1.5 rounded text-xs flex items-center justify-center gap-2"
+            className="btn-ghost-cyan w-full py-1.5 text-xs flex items-center justify-center gap-2"
             onClick={onClearAll}
             style={{ color: "hsl(var(--destructive))", borderColor: "hsl(var(--destructive) / 0.3)" }}
           >

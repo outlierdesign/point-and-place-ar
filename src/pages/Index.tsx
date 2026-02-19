@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn } from "lucide-react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, ShieldCheck, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer, { DEFAULT_MODEL_URL } from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModels } from "@/hooks/useModels";
 import { useAnnotations } from "@/hooks/useAnnotations";
 import { ModelRecord } from "@/components/ModelLibrary";
+import { supabase } from "@/integrations/supabase/client";
 
 const DEFAULT_MODEL_NAME = "DamagedHelmet.glTF";
 
@@ -24,6 +25,10 @@ export default function Index() {
   const [newLabel, setNewLabel] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [arSupported, setArSupported] = useState<boolean | null>(null);
+
+  // Claim admin state
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   // Model display state
   const [modelUrl, setModelUrl] = useState(DEFAULT_MODEL_URL);
@@ -146,6 +151,19 @@ export default function Index() {
     setPendingPos(null);
   };
 
+  const handleClaimAdmin = async () => {
+    setClaiming(true);
+    setClaimError(null);
+    const { error } = await supabase.rpc("claim_admin" as never);
+    if (error) {
+      setClaimError(error.message);
+    } else {
+      // Refresh page so auth hook re-checks role
+      window.location.reload();
+    }
+    setClaiming(false);
+  };
+
   const handleAR = async () => {
     if (!arSupported) return;
     try {
@@ -159,7 +177,6 @@ export default function Index() {
     }
   };
 
-  // Copy embed URL to clipboard
   const embedUrl = selectedModelId
     ? `${window.location.origin}/embed/${selectedModelId}`
     : null;
@@ -176,7 +193,7 @@ export default function Index() {
   if (authLoading) {
     return (
       <div className="w-screen h-screen flex items-center justify-center" style={{ background: "hsl(var(--background))" }}>
-        <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--cyan))", borderTopColor: "transparent" }} />
+        <div className="w-6 h-6 border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--gold))", borderTopColor: "transparent" }} />
       </div>
     );
   }
@@ -191,7 +208,6 @@ export default function Index() {
       onDrop={handleDrop}
     >
       <input ref={fileInputRef} type="file" accept=".gltf,.glb" className="hidden" onChange={handleFileInput} />
-      <div className="scanline absolute inset-0 pointer-events-none z-10" />
 
       {/* 3D Canvas */}
       <div className="absolute inset-0 z-0">
@@ -199,8 +215,8 @@ export default function Index() {
           fallback={
             <div className="w-full h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--cyan))", borderTopColor: "transparent" }} />
-                <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--cyan))" }}>LOADING MODEL...</div>
+                <div className="w-8 h-8 border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--gold))", borderTopColor: "transparent" }} />
+                <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--gold))" }}>LOADING MODEL...</div>
               </div>
             </div>
           }
@@ -220,10 +236,10 @@ export default function Index() {
 
       {/* Drag overlay */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center fade-in pointer-events-none" style={{ background: "hsl(220 20% 4% / 0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="flex flex-col items-center gap-4 p-12 rounded-2xl" style={{ border: "2px dashed hsl(var(--cyan))", boxShadow: "0 0 40px hsl(185 100% 50% / 0.2)" }}>
-            <FolderOpen size={40} style={{ color: "hsl(var(--cyan))", filter: "drop-shadow(0 0 12px hsl(185 100% 50% / 0.8))" }} />
-            <div className="font-mono font-bold tracking-widest uppercase" style={{ color: "hsl(var(--cyan))" }}>Drop Model Here</div>
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center fade-in pointer-events-none" style={{ background: "hsl(var(--muted) / 0.85)", backdropFilter: "blur(8px)" }}>
+          <div className="flex flex-col items-center gap-4 p-12" style={{ border: "2px dashed hsl(var(--gold))", boxShadow: "0 0 40px hsl(var(--gold) / 0.2)" }}>
+            <FolderOpen size={40} style={{ color: "hsl(var(--gold))", filter: "drop-shadow(0 0 12px hsl(36 58% 41% / 0.6))" }} />
+            <div className="font-mono font-bold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>Drop Model Here</div>
             <div className="font-mono text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>Supports .gltf and .glb files</div>
           </div>
         </div>
@@ -231,10 +247,10 @@ export default function Index() {
 
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-5 py-3">
-        <div className="glass-panel flex items-center gap-3 px-4 py-2 rounded-lg">
-          <Layers size={14} style={{ color: "hsl(var(--cyan))" }} />
+        <div className="glass-panel flex items-center gap-3 px-4 py-2">
+          <Layers size={14} style={{ color: "hsl(var(--gold))" }} />
           <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--foreground))" }}>
-            AR Model Viewer
+            Acres Ireland
           </span>
           <div className="w-px h-3 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
           <span className="font-mono text-xs max-w-48 truncate" style={{ color: "hsl(var(--muted-foreground))" }}>
@@ -243,24 +259,21 @@ export default function Index() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Local file load */}
           {isAdmin && (
-            <button className="glass-panel btn-ghost-cyan px-3 py-2 rounded-lg flex items-center gap-2" onClick={() => fileInputRef.current?.click()} title="Load a local GLTF or GLB file">
+            <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={() => fileInputRef.current?.click()} title="Load a local GLTF or GLB file">
               <FolderOpen size={12} />
-              <span className="tracking-widest uppercase">Load Local</span>
+              <span className="tracking-widest uppercase text-xs">Load Local</span>
             </button>
           )}
 
-          {/* Embed copy */}
           {embedUrl && (
-            <button className="glass-panel btn-ghost-cyan px-3 py-2 rounded-lg flex items-center gap-2" onClick={copyEmbedUrl} title="Copy embed code">
-              <span className="font-mono text-xs tracking-widest uppercase">&lt;/&gt; Embed</span>
+            <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={copyEmbedUrl} title="Copy embed code">
+              <span className="text-xs tracking-widest uppercase">&lt;/&gt; Embed</span>
             </button>
           )}
 
-          {/* AR */}
           <button
-            className={`glass-panel px-3 py-2 rounded-lg flex items-center gap-2 font-mono text-xs transition-all duration-200 ${arSupported ? "btn-ghost-cyan" : "opacity-40 cursor-not-allowed"}`}
+            className={`glass-panel px-3 py-2 flex items-center gap-2 text-xs transition-all duration-200 ${arSupported ? "btn-ghost-cyan" : "opacity-40 cursor-not-allowed"}`}
             onClick={handleAR}
             disabled={!arSupported}
             title={arSupported ? "Enter AR mode" : "AR not supported on this device"}
@@ -271,53 +284,52 @@ export default function Index() {
             </span>
           </button>
 
-          <button className="glass-panel p-2 rounded-lg" style={{ color: "hsl(var(--muted-foreground))" }}>
+          <button className="glass-panel p-2" style={{ color: "hsl(var(--muted-foreground))" }}>
             <Maximize2 size={14} />
           </button>
 
-          {/* Auth */}
           {user ? (
             <button
-              className="glass-panel btn-ghost-cyan px-3 py-2 rounded-lg flex items-center gap-2"
+              className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2"
               onClick={signOut}
               title="Sign out"
             >
               <LogOut size={12} />
-              <span className="tracking-widest uppercase">Sign Out</span>
+              <span className="tracking-widest uppercase text-xs">Sign Out</span>
             </button>
           ) : (
             <button
-              className="glass-panel btn-ghost-cyan px-3 py-2 rounded-lg flex items-center gap-2"
+              className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2"
               onClick={() => navigate("/auth")}
               title="Sign in"
             >
               <LogIn size={12} />
-              <span className="tracking-widest uppercase">Sign In</span>
+              <span className="tracking-widest uppercase text-xs">Sign In</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Bottom-left controls hint */}
-      <div className="absolute bottom-5 left-5 z-20 glass-panel px-3 py-2 rounded-lg">
+      <div className="absolute bottom-5 left-5 z-20 glass-panel px-3 py-2">
         <div className="font-mono space-y-1" style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Drag</span> — Orbit</div>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Scroll</span> — Zoom</div>
-          <div><span style={{ color: "hsl(var(--cyan))" }}>Right drag</span> — Pan</div>
+          <div><span style={{ color: "hsl(var(--gold))" }}>Drag</span> — Orbit</div>
+          <div><span style={{ color: "hsl(var(--gold))" }}>Scroll</span> — Zoom</div>
+          <div><span style={{ color: "hsl(var(--gold))" }}>Right drag</span> — Pan</div>
           {isAdmin && (
             <div style={{ borderTop: "1px solid hsl(var(--glass-border))", paddingTop: 4, marginTop: 2 }}>
-              <span style={{ color: "hsl(var(--cyan))" }}>Drop</span> .gltf / .glb to load
+              <span style={{ color: "hsl(var(--gold))" }}>Drop</span> .gltf / .glb to load
             </div>
           )}
           {isPlacingMode && (
-            <div className="fade-in" style={{ color: "hsl(var(--cyan))" }}>Click model to place pin</div>
+            <div className="fade-in" style={{ color: "hsl(var(--gold))" }}>Click model to place pin</div>
           )}
         </div>
       </div>
 
       {/* Load error */}
       {loadError && (
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 glass-panel px-4 py-3 rounded-lg flex items-center gap-3 fade-in" style={{ borderColor: "hsl(var(--destructive) / 0.5)" }}>
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 glass-panel px-4 py-3 flex items-center gap-3 fade-in" style={{ borderColor: "hsl(var(--destructive) / 0.5)" }}>
           <X size={12} style={{ color: "hsl(var(--destructive))" }} />
           <span className="font-mono text-xs" style={{ color: "hsl(var(--foreground))" }}>{loadError}</span>
           <button onClick={() => setLoadError(null)} className="ml-2" style={{ color: "hsl(var(--muted-foreground))" }}>
@@ -327,13 +339,33 @@ export default function Index() {
       )}
 
       {/* Left panel — Model Library */}
-      <div className="absolute left-5 top-16 bottom-5 z-20 w-56 flex flex-col">
+      <div className="absolute left-5 top-16 bottom-5 z-20 w-56 flex flex-col gap-2">
         <ModelLibrary
           models={models}
           selectedModelId={selectedModelId}
           onSelectModel={handleSelectModel}
           onRefresh={refetchModels}
         />
+
+        {/* Claim Admin — first-run only */}
+        {user && !isAdmin && (
+          <div className="glass-panel p-3 space-y-2">
+            <p className="font-mono text-xs leading-relaxed" style={{ color: "hsl(var(--muted-foreground))", fontSize: 10 }}>
+              No admin yet? Claim access to upload models.
+            </p>
+            {claimError && (
+              <p className="font-mono text-xs" style={{ color: "hsl(var(--destructive))", fontSize: 10 }}>{claimError}</p>
+            )}
+            <button
+              className="btn-cyan w-full py-2 flex items-center justify-center gap-2 text-xs"
+              onClick={handleClaimAdmin}
+              disabled={claiming}
+            >
+              {claiming ? <Loader2 size={11} className="animate-spin" /> : <ShieldCheck size={11} />}
+              {claiming ? "Claiming..." : "Claim Admin Access"}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Right panel — Annotations */}
@@ -352,11 +384,11 @@ export default function Index() {
 
       {/* Pending annotation modal */}
       {pendingPos && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ background: "hsl(220 20% 4% / 0.6)", backdropFilter: "blur(4px)" }}>
-          <div className="glass-panel rounded-xl p-6 w-80 fade-in space-y-4">
+        <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ background: "hsl(var(--muted) / 0.6)", backdropFilter: "blur(4px)" }}>
+          <div className="glass-panel p-6 w-80 fade-in space-y-4">
             <div className="flex items-center gap-2">
-              <Info size={14} style={{ color: "hsl(var(--cyan))" }} />
-              <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--cyan))" }}>
+              <Info size={14} style={{ color: "hsl(var(--gold))" }} />
+              <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>
                 New Annotation
               </span>
             </div>
@@ -364,28 +396,28 @@ export default function Index() {
               Position: {pendingPos.map((v) => v.toFixed(3)).join(", ")}
             </div>
             <input
-              className="w-full bg-transparent border rounded px-3 py-2 font-mono text-sm outline-none"
-              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--foreground))", fontSize: 12 }}
+              className="w-full bg-transparent border px-3 py-2 font-mono text-sm outline-none"
+              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--foreground))", fontSize: 13 }}
               placeholder="Label (e.g. Visor, Damage Point)"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--cyan))")}
+              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
               onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
               autoFocus
               onKeyDown={(e) => e.key === "Enter" && confirmAnnotation()}
             />
             <textarea
-              className="w-full bg-transparent border rounded px-3 py-2 font-mono text-xs outline-none resize-none"
-              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(200, 15%, 65%)", fontSize: 11, height: 64 }}
+              className="w-full bg-transparent border px-3 py-2 font-mono text-xs outline-none resize-none"
+              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 11, height: 64 }}
               placeholder="Description (optional)"
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--cyan))")}
+              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
               onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
             />
             <div className="flex gap-2">
-              <button className="btn-cyan flex-1 py-2 rounded-md" onClick={confirmAnnotation}>Place Pin</button>
-              <button className="btn-ghost-cyan px-4 py-2 rounded-md" onClick={() => setPendingPos(null)}>Cancel</button>
+              <button className="btn-cyan flex-1 py-2" onClick={confirmAnnotation}>Place Pin</button>
+              <button className="btn-ghost-cyan px-4 py-2" onClick={() => setPendingPos(null)}>Cancel</button>
             </div>
           </div>
         </div>
