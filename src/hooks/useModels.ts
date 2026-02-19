@@ -10,7 +10,7 @@ export function useModels() {
     setLoading(true);
     const { data } = await supabase
       .from("models")
-      .select("id, name, storage_path, file_size, created_at")
+      .select("id, name, storage_path, file_size, created_at, thumbnail_path")
       .eq("is_public", true)
       .order("created_at", { ascending: true })
       .limit(6);
