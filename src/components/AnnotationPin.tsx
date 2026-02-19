@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, forwardRef } from "react";
 import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -18,11 +18,11 @@ interface AnnotationPinProps {
   onDelete: (id: string) => void;
 }
 
-export default function AnnotationPin({
+const AnnotationPin = forwardRef<THREE.Group, AnnotationPinProps>(function AnnotationPin({
   annotation,
   selected,
   onSelect,
-}: AnnotationPinProps) {
+}, _ref) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -240,4 +240,6 @@ export default function AnnotationPin({
       </Html>
     </group>
   );
-}
+});
+
+export default AnnotationPin;
