@@ -11,10 +11,6 @@ import {
 import * as THREE from "three";
 import AnnotationPin, { Annotation } from "./AnnotationPin";
 
-// Demo model — Damaged Helmet from Three.js examples
-export const DEFAULT_MODEL_URL =
-  "https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf";
-
 function SceneModel({
   url,
   isPlacingMode,
@@ -160,5 +156,3 @@ export default function ModelViewer({
   );
 }
 
-// Preload the default model
-useGLTF.preload(DEFAULT_MODEL_URL);
