@@ -39,9 +39,13 @@ export default function Index() {
   const dragCounterRef = useRef(0);
   const arQuickLookRef = useRef<HTMLAnchorElement>(null);
 
-  // iOS detection (covers iPhone, iPad, iPod)
+  // iOS detection (covers iPhone, iPad, iPod, and modern iPads reporting MacIntel)
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  // AR Quick Look only works with public HTTPS URLs — not blob: URLs (local files)
+  const modelUrlIsPublic = !!modelUrl && modelUrl.startsWith("https://");
+  const iosArAvailable = isIOS && modelUrlIsPublic;
 
   const getPublicUrl = useCallback((storagePath: string) => {
     const { data } = supabase.storage.from("models").getPublicUrl(storagePath);
@@ -180,8 +184,19 @@ export default function Index() {
   const handleAR = async () => {
     // iOS Safari: use AR Quick Look (GLB supported from iOS 15+)
     if (isIOS) {
-      if (!modelUrl) return;
-      arQuickLookRef.current?.click();
+      if (!iosArAvailable) {
+        if (isIOS && modelUrl && !modelUrlIsPublic) {
+          alert("AR Quick Look requires a model loaded from the library (public URL). Local files cannot be used with AR Quick Look.");
+        }
+        return;
+      }
+      // Temporarily make the anchor pointer-events active, click it, then restore
+      const anchor = arQuickLookRef.current;
+      if (anchor) {
+        anchor.style.pointerEvents = "auto";
+        anchor.click();
+        anchor.style.pointerEvents = "none";
+      }
       return;
     }
     // Android / desktop: WebXR
@@ -229,13 +244,13 @@ export default function Index() {
     >
       <input ref={fileInputRef} type="file" accept=".gltf,.glb" className="hidden" onChange={handleFileInput} />
 
-      {/* Hidden anchor for iOS AR Quick Look (GLB supported iOS 15+) */}
-      {/* Safari intercepts clicks on <a rel="ar"> and opens AR Quick Look */}
+      {/* iOS AR Quick Look anchor — must NOT be display:none; Safari won't intercept hidden anchors */}
+      {/* Visually hidden via zero dimensions but remains in the DOM and interactive */}
       <a
         ref={arQuickLookRef}
         rel="ar"
-        href={modelUrl ?? undefined}
-        style={{ display: "none" }}
+        href={modelUrlIsPublic ? modelUrl! : undefined}
+        style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none" }}
       >
         <img alt="AR" />
       </a>
@@ -310,20 +325,24 @@ export default function Index() {
           {/* Desktop AR button */}
           <button
             className={`glass-panel px-3 py-2 flex items-center gap-2 text-xs transition-all duration-200 ${
-              (isIOS && modelUrl) || arSupported ? "btn-ghost-cyan" : "opacity-40 cursor-not-allowed"
+              iosArAvailable || arSupported ? "btn-ghost-cyan" : "opacity-40 cursor-not-allowed"
             }`}
             onClick={handleAR}
-            disabled={isIOS ? !modelUrl : !arSupported}
+            disabled={isIOS ? !iosArAvailable : !arSupported}
             title={
               isIOS
-                ? modelUrl ? "Open in AR Quick Look (iOS)" : "Load a model first"
+                ? iosArAvailable
+                  ? "Open in AR Quick Look (iOS 15+)"
+                  : modelUrl && !modelUrlIsPublic
+                    ? "AR Quick Look requires a model from the library"
+                    : "Load a model first"
                 : arSupported ? "Enter AR mode" : "AR not supported on this device"
             }
           >
             <Crosshair size={12} />
             <span className="tracking-widest uppercase">
               {isIOS
-                ? modelUrl ? "AR Quick Look" : "AR N/A"
+                ? iosArAvailable ? "AR Quick Look" : "AR N/A"
                 : arSupported === null ? "Checking..." : arSupported ? "Enter AR" : "AR N/A"}
             </span>
           </button>
@@ -469,15 +488,15 @@ export default function Index() {
         <button
           className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
           style={{
-            color: (isIOS && modelUrl) || arSupported ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
-            opacity: (isIOS && modelUrl) || arSupported ? 1 : 0.4
+            color: iosArAvailable || arSupported ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
+            opacity: iosArAvailable || arSupported ? 1 : 0.4
           }}
           onClick={handleAR}
-          disabled={isIOS ? !modelUrl : !arSupported}
+          disabled={isIOS ? !iosArAvailable : !arSupported}
         >
           <Crosshair size={18} />
           <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>
-            {isIOS ? (modelUrl ? "QUICK LOOK" : "AR N/A") : "AR"}
+            {isIOS ? (iosArAvailable ? "QUICK LOOK" : "AR N/A") : "AR"}
           </span>
         </button>
 
