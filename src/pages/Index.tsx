@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn } from "lucide-react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Menu } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer, { DEFAULT_MODEL_URL } from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
@@ -25,6 +25,9 @@ export default function Index() {
   const [newDesc, setNewDesc] = useState("");
   const [arSupported, setArSupported] = useState<boolean | null>(null);
 
+  // Mobile drawer state
+  const [modelsOpen, setModelsOpen] = useState(false);
+  const [annotationsOpen, setAnnotationsOpen] = useState(false);
 
   // Model display state
   const [modelUrl, setModelUrl] = useState(DEFAULT_MODEL_URL);
@@ -94,6 +97,8 @@ export default function Index() {
     setModelKey(`db_${model.id}`);
     setModelName(model.name);
     setLoadError(null);
+    // Close drawer on mobile after selecting
+    setModelsOpen(false);
   }, []);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -147,7 +152,6 @@ export default function Index() {
     setPendingPos(null);
   };
 
-
   const handleAR = async () => {
     if (!arSupported) return;
     try {
@@ -193,7 +197,7 @@ export default function Index() {
     >
       <input ref={fileInputRef} type="file" accept=".gltf,.glb" className="hidden" onChange={handleFileInput} />
 
-      {/* 3D Canvas */}
+      {/* 3D Canvas — full screen always */}
       <div className="absolute inset-0 z-0">
         <Suspense
           fallback={
@@ -229,20 +233,22 @@ export default function Index() {
         </div>
       )}
 
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-5 py-3">
-        <div className="glass-panel flex items-center gap-3 px-4 py-2">
+      {/* ── Top bar ── */}
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-3 md:px-5 py-3">
+        {/* Logo badge */}
+        <div className="glass-panel flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2">
           <Layers size={14} style={{ color: "hsl(var(--gold))" }} />
           <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--foreground))" }}>
             Acres Ireland
           </span>
-          <div className="w-px h-3 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-          <span className="font-mono text-xs max-w-48 truncate" style={{ color: "hsl(var(--muted-foreground))" }}>
+          <div className="hidden md:block w-px h-3 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+          <span className="hidden md:block font-mono text-xs max-w-48 truncate" style={{ color: "hsl(var(--muted-foreground))" }}>
             {modelName}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Desktop actions */}
+        <div className="hidden md:flex items-center gap-2">
           {isAdmin && (
             <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={() => fileInputRef.current?.click()} title="Load a local GLTF or GLB file">
               <FolderOpen size={12} />
@@ -273,29 +279,175 @@ export default function Index() {
           </button>
 
           {user ? (
-            <button
-              className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2"
-              onClick={signOut}
-              title="Sign out"
-            >
+            <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={signOut} title="Sign out">
               <LogOut size={12} />
               <span className="tracking-widest uppercase text-xs">Sign Out</span>
             </button>
           ) : (
-            <button
-              className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2"
-              onClick={() => navigate("/auth")}
-              title="Sign in"
-            >
+            <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={() => navigate("/auth")} title="Sign in">
               <LogIn size={12} />
               <span className="tracking-widest uppercase text-xs">Sign In</span>
             </button>
           )}
         </div>
+
+        {/* Mobile top-right quick icons */}
+        <div className="flex md:hidden items-center gap-2">
+          <button
+            className="glass-panel p-2.5"
+            style={{ color: modelsOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+            onClick={() => { setModelsOpen((v) => !v); setAnnotationsOpen(false); }}
+            title="Models"
+          >
+            <Menu size={16} />
+          </button>
+          <button
+            className="glass-panel p-2.5"
+            style={{ color: annotationsOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+            onClick={() => { setAnnotationsOpen((v) => !v); setModelsOpen(false); }}
+            title="Annotations"
+          >
+            <MapPin size={16} />
+          </button>
+        </div>
       </div>
 
-      {/* Bottom-left controls hint */}
-      <div className="absolute bottom-5 left-5 z-20 glass-panel px-3 py-2">
+      {/* ── Desktop side panels ── */}
+      {/* Left panel — visible only on md+ */}
+      <div className="hidden md:flex absolute left-5 top-16 bottom-5 z-20 w-56 flex-col gap-2">
+        <ModelLibrary
+          models={models}
+          selectedModelId={selectedModelId}
+          onSelectModel={handleSelectModel}
+          onRefresh={refetchModels}
+        />
+      </div>
+
+      {/* Right panel — visible only on md+ */}
+      <div className="hidden md:flex absolute right-5 top-16 bottom-5 z-20 w-64 flex-col">
+        <AnnotationPanel
+          annotations={annotations}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onDelete={deleteAnnotation}
+          onUpdate={(id, label, desc, media_url, video_url) =>
+            updateAnnotation(id, label, desc, media_url, video_url)
+          }
+          isPlacingMode={isPlacingMode}
+          onTogglePlacingMode={() => setIsPlacingMode((v) => !v)}
+          onClearAll={clearAll}
+        />
+      </div>
+
+      {/* ── Mobile off-canvas backdrop ── */}
+      {(modelsOpen || annotationsOpen) && (
+        <div
+          className="fixed inset-0 z-30 md:hidden"
+          style={{ background: "hsl(var(--muted) / 0.5)", backdropFilter: "blur(2px)" }}
+          onClick={() => { setModelsOpen(false); setAnnotationsOpen(false); }}
+        />
+      )}
+
+      {/* ── Mobile Models drawer (slides from left) ── */}
+      <div
+        className={`fixed inset-y-0 left-0 z-40 md:hidden w-72 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-20 px-3`}
+        style={{ transform: modelsOpen ? "translateX(0)" : "translateX(-100%)" }}
+      >
+        <ModelLibrary
+          models={models}
+          selectedModelId={selectedModelId}
+          onSelectModel={handleSelectModel}
+          onRefresh={refetchModels}
+          onClose={() => setModelsOpen(false)}
+        />
+      </div>
+
+      {/* ── Mobile Annotations drawer (slides from right) ── */}
+      <div
+        className={`fixed inset-y-0 right-0 z-40 md:hidden w-72 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-20 px-3`}
+        style={{ transform: annotationsOpen ? "translateX(0)" : "translateX(100%)" }}
+      >
+        <AnnotationPanel
+          annotations={annotations}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onDelete={deleteAnnotation}
+          onUpdate={(id, label, desc, media_url, video_url) =>
+            updateAnnotation(id, label, desc, media_url, video_url)
+          }
+          isPlacingMode={isPlacingMode}
+          onTogglePlacingMode={() => setIsPlacingMode((v) => !v)}
+          onClearAll={clearAll}
+          onClose={() => setAnnotationsOpen(false)}
+        />
+      </div>
+
+      {/* ── Mobile bottom toolbar ── */}
+      <div
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center gap-1 px-3 py-2 glass-panel"
+        style={{ borderColor: "hsl(var(--glass-border))" }}
+      >
+        {/* Models */}
+        <button
+          className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+          style={{ color: modelsOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+          onClick={() => { setModelsOpen((v) => !v); setAnnotationsOpen(false); }}
+        >
+          <Layers size={18} />
+          <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>MODELS</span>
+        </button>
+
+        <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+
+        {/* Annotations */}
+        <button
+          className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+          style={{ color: annotationsOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+          onClick={() => { setAnnotationsOpen((v) => !v); setModelsOpen(false); }}
+        >
+          <MapPin size={18} />
+          <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>PINS</span>
+        </button>
+
+        <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+
+        {/* AR */}
+        <button
+          className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+          style={{ color: arSupported ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))", opacity: arSupported ? 1 : 0.4 }}
+          onClick={handleAR}
+          disabled={!arSupported}
+        >
+          <Crosshair size={18} />
+          <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>AR</span>
+        </button>
+
+        <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+
+        {/* Auth */}
+        {user ? (
+          <button
+            className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+            style={{ color: "hsl(var(--muted-foreground))" }}
+            onClick={signOut}
+          >
+            <LogOut size={18} />
+            <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>OUT</span>
+          </button>
+        ) : (
+          <button
+            className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+            style={{ color: "hsl(var(--muted-foreground))" }}
+            onClick={() => navigate("/auth")}
+          >
+            <LogIn size={18} />
+            <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>IN</span>
+          </button>
+        )}
+      </div>
+
+      {/* Bottom-left controls hint — desktop only */}
+      <div className="hidden md:block absolute bottom-5 left-5 z-20 glass-panel px-3 py-2">
         <div className="font-mono space-y-1" style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>
           <div><span style={{ color: "hsl(var(--gold))" }}>Drag</span> — Orbit</div>
           <div><span style={{ color: "hsl(var(--gold))" }}>Scroll</span> — Zoom</div>
@@ -313,46 +465,19 @@ export default function Index() {
 
       {/* Load error */}
       {loadError && (
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 glass-panel px-4 py-3 flex items-center gap-3 fade-in" style={{ borderColor: "hsl(var(--destructive) / 0.5)" }}>
+        <div className="absolute bottom-24 md:bottom-5 left-1/2 -translate-x-1/2 z-40 glass-panel px-4 py-3 flex items-center gap-3 fade-in w-80" style={{ borderColor: "hsl(var(--destructive) / 0.5)" }}>
           <X size={12} style={{ color: "hsl(var(--destructive))" }} />
-          <span className="font-mono text-xs" style={{ color: "hsl(var(--foreground))" }}>{loadError}</span>
-          <button onClick={() => setLoadError(null)} className="ml-2" style={{ color: "hsl(var(--muted-foreground))" }}>
+          <span className="font-mono text-xs flex-1" style={{ color: "hsl(var(--foreground))" }}>{loadError}</span>
+          <button onClick={() => setLoadError(null)} style={{ color: "hsl(var(--muted-foreground))" }}>
             <X size={10} />
           </button>
         </div>
       )}
 
-      {/* Left panel — Model Library */}
-      <div className="absolute left-5 top-16 bottom-5 z-20 w-56 flex flex-col gap-2">
-        <ModelLibrary
-          models={models}
-          selectedModelId={selectedModelId}
-          onSelectModel={handleSelectModel}
-          onRefresh={refetchModels}
-        />
-
-      </div>
-
-      {/* Right panel — Annotations */}
-      <div className="absolute right-5 top-16 bottom-5 z-20 w-64 flex flex-col">
-        <AnnotationPanel
-          annotations={annotations}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onDelete={deleteAnnotation}
-          onUpdate={(id, label, desc, media_url, video_url) =>
-            updateAnnotation(id, label, desc, media_url, video_url)
-          }
-          isPlacingMode={isPlacingMode}
-          onTogglePlacingMode={() => setIsPlacingMode((v) => !v)}
-          onClearAll={clearAll}
-        />
-      </div>
-
       {/* Pending annotation modal */}
       {pendingPos && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ background: "hsl(var(--muted) / 0.6)", backdropFilter: "blur(4px)" }}>
-          <div className="glass-panel p-6 w-80 fade-in space-y-4">
+        <div className="absolute inset-0 z-50 flex items-center justify-center px-4" style={{ background: "hsl(var(--muted) / 0.6)", backdropFilter: "blur(4px)" }}>
+          <div className="glass-panel p-6 w-full max-w-sm fade-in space-y-4">
             <div className="flex items-center gap-2">
               <Info size={14} style={{ color: "hsl(var(--gold))" }} />
               <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>

@@ -11,6 +11,7 @@ interface AnnotationPanelProps {
   isPlacingMode: boolean;
   onTogglePlacingMode: () => void;
   onClearAll: () => void;
+  onClose?: () => void;
 }
 
 export default function AnnotationPanel({
@@ -22,6 +23,7 @@ export default function AnnotationPanel({
   isPlacingMode,
   onTogglePlacingMode,
   onClearAll,
+  onClose,
 }: AnnotationPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -51,20 +53,29 @@ export default function AnnotationPanel({
     <div className="glass-panel flex flex-col overflow-hidden" style={{ maxHeight: "100%" }}>
       {/* Header — always visible, click to collapse */}
       <div
-        className="px-4 py-3 flex items-center gap-2 cursor-pointer select-none"
+        className="px-4 py-3 flex items-center gap-2 select-none"
         style={{ borderBottom: collapsed ? "none" : "1px solid hsl(var(--glass-border))" }}
-        onClick={() => setCollapsed((v) => !v)}
       >
-        <div className="w-2 h-2 flex-shrink-0" style={{ background: "hsl(var(--gold))" }} />
-        <span className="font-mono text-xs font-semibold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>
-          Annotations
-        </span>
-        <span className="ml-auto font-mono text-xs mr-2" style={{ color: "hsl(var(--muted-foreground))" }}>
-          {annotations.length} / 20
-        </span>
-        {collapsed
-          ? <ChevronRight size={12} style={{ color: "hsl(var(--muted-foreground))", flexShrink: 0 }} />
-          : <ChevronDown size={12} style={{ color: "hsl(var(--muted-foreground))", flexShrink: 0 }} />}
+        <div
+          className="flex items-center gap-2 flex-1 cursor-pointer"
+          onClick={() => setCollapsed((v) => !v)}
+        >
+          <div className="w-2 h-2 flex-shrink-0" style={{ background: "hsl(var(--gold))" }} />
+          <span className="font-mono text-xs font-semibold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>
+            Annotations
+          </span>
+          <span className="ml-auto font-mono text-xs mr-1" style={{ color: "hsl(var(--muted-foreground))" }}>
+            {annotations.length} / 20
+          </span>
+          {collapsed
+            ? <ChevronRight size={12} style={{ color: "hsl(var(--muted-foreground))", flexShrink: 0 }} />
+            : <ChevronDown size={12} style={{ color: "hsl(var(--muted-foreground))", flexShrink: 0 }} />}
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="p-1 transition-colors hover:bg-white/5 flex-shrink-0" style={{ color: "hsl(var(--muted-foreground))" }} title="Close">
+            <X size={13} />
+          </button>
+        )}
       </div>
 
       {/* Collapsible body */}

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Upload, Trash2, CheckCircle2, Loader2, Box, ImagePlus } from "lucide-react";
+import { Upload, Trash2, CheckCircle2, Loader2, Box, ImagePlus, X } from "lucide-react";
 
 export interface ModelRecord {
   id: string;
@@ -17,6 +17,7 @@ interface ModelLibraryProps {
   selectedModelId: string | null;
   onSelectModel: (model: ModelRecord, url: string) => void;
   onRefresh: () => void;
+  onClose?: () => void;
 }
 
 export default function ModelLibrary({
@@ -24,6 +25,7 @@ export default function ModelLibrary({
   selectedModelId,
   onSelectModel,
   onRefresh,
+  onClose,
 }: ModelLibraryProps) {
   const { isAdmin, adminLoading } = useAuth();
   const [uploading, setUploading] = useState(false);
@@ -131,13 +133,18 @@ export default function ModelLibrary({
       {/* Header */}
       <div className="px-4 py-3 border-b" style={{ borderColor: "hsl(var(--glass-border))" }}>
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-2 h-2" style={{ background: "hsl(var(--gold))" }} />
+          <div className="w-2 h-2 flex-shrink-0" style={{ background: "hsl(var(--gold))" }} />
           <span className="font-mono text-xs font-semibold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>
             Models
           </span>
-          <span className="ml-auto font-mono text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>
+          <span className="ml-auto font-mono text-xs mr-1" style={{ color: "hsl(var(--muted-foreground))" }}>
             {models.length} / 6
           </span>
+          {onClose && (
+            <button onClick={onClose} className="p-1 transition-colors hover:bg-white/5 flex-shrink-0" style={{ color: "hsl(var(--muted-foreground))" }} title="Close">
+              <X size={13} />
+            </button>
+          )}
         </div>
 
         {adminLoading ? (
