@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
 import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Menu } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import ModelViewer, { DEFAULT_MODEL_URL } from "@/components/ModelViewer";
+import ModelViewer from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
 import ModelLibrary from "@/components/ModelLibrary";
 import { Annotation } from "@/components/AnnotationPin";
@@ -9,8 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModels } from "@/hooks/useModels";
 import { useAnnotations } from "@/hooks/useAnnotations";
 import { ModelRecord } from "@/components/ModelLibrary";
-
-const DEFAULT_MODEL_NAME = "DamagedHelmet.glTF";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Index() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
@@ -30,25 +29,51 @@ export default function Index() {
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
 
   // Model display state
-  const [modelUrl, setModelUrl] = useState(DEFAULT_MODEL_URL);
+  const [modelUrl, setModelUrl] = useState<string | null>(null);
   const [modelKey, setModelKey] = useState("default");
-  const [modelName, setModelName] = useState(DEFAULT_MODEL_NAME);
+  const [modelName, setModelName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
+  const arQuickLookRef = useRef<HTMLAnchorElement>(null);
+
+  // iOS detection (covers iPhone, iPad, iPod)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  const getPublicUrl = useCallback((storagePath: string) => {
+    const { data } = supabase.storage.from("models").getPublicUrl(storagePath);
+    return data.publicUrl;
+  }, []);
 
   const { annotations, addAnnotation, updateAnnotation, deleteAnnotation, clearAll } =
     useAnnotations(selectedModelId);
 
+  // Auto-select first model (Peatland.glb) when library loads
   useEffect(() => {
-    if (navigator.xr) {
-      navigator.xr.isSessionSupported("immersive-ar").then(setArSupported);
-    } else {
-      setArSupported(false);
+    if (!modelsLoading && models.length > 0 && selectedModelId === null && modelUrl === null) {
+      const first = models[0];
+      const url = getPublicUrl(first.storage_path);
+      setSelectedModelId(first.id);
+      setModelUrl(url);
+      setModelKey(`db_${first.id}`);
+      setModelName(first.name);
     }
-  }, []);
+  }, [modelsLoading, models, selectedModelId, modelUrl, getPublicUrl]);
+
+  useEffect(() => {
+    // AR: check WebXR on Android / desktop
+    if (!isIOS) {
+      if (navigator.xr) {
+        navigator.xr.isSessionSupported("immersive-ar").then(setArSupported);
+      } else {
+        setArSupported(false);
+      }
+    }
+    // iOS: AR Quick Look is always available when a model is loaded
+  }, [isIOS]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -153,15 +178,22 @@ export default function Index() {
   };
 
   const handleAR = async () => {
+    // iOS Safari: use AR Quick Look (GLB supported from iOS 15+)
+    if (isIOS) {
+      if (!modelUrl) return;
+      arQuickLookRef.current?.click();
+      return;
+    }
+    // Android / desktop: WebXR
     if (!arSupported) return;
     try {
       const session = await (navigator.xr as unknown as { requestSession: (type: string, opts: object) => Promise<{ end: () => void }> }).requestSession("immersive-ar", {
         requiredFeatures: ["hit-test"],
       });
       session.end();
-      alert("AR session started! Full AR integration requires a mobile device with ARCore/ARKit support.");
+      alert("AR session started! Full AR integration requires a mobile device with ARCore support.");
     } catch {
-      alert("Could not start AR session. Please use a compatible mobile device.");
+      alert("Could not start AR session. Please use a compatible mobile device with ARCore.");
     }
   };
 
@@ -197,6 +229,17 @@ export default function Index() {
     >
       <input ref={fileInputRef} type="file" accept=".gltf,.glb" className="hidden" onChange={handleFileInput} />
 
+      {/* Hidden anchor for iOS AR Quick Look (GLB supported iOS 15+) */}
+      {/* Safari intercepts clicks on <a rel="ar"> and opens AR Quick Look */}
+      <a
+        ref={arQuickLookRef}
+        rel="ar"
+        href={modelUrl ?? undefined}
+        style={{ display: "none" }}
+      >
+        <img alt="AR" />
+      </a>
+
       {/* 3D Canvas — full screen always */}
       <div className="absolute inset-0 z-0">
         <Suspense
@@ -209,16 +252,18 @@ export default function Index() {
             </div>
           }
         >
-          <ModelViewer
-            modelUrl={modelUrl}
-            modelKey={modelKey}
-            annotations={annotations}
-            selectedId={selectedId}
-            isPlacingMode={isPlacingMode}
-            onPlace={handlePlace}
-            onSelectAnnotation={setSelectedId}
-            onDeleteAnnotation={deleteAnnotation}
-          />
+          {modelUrl && (
+            <ModelViewer
+              modelUrl={modelUrl}
+              modelKey={modelKey}
+              annotations={annotations}
+              selectedId={selectedId}
+              isPlacingMode={isPlacingMode}
+              onPlace={handlePlace}
+              onSelectAnnotation={setSelectedId}
+              onDeleteAnnotation={deleteAnnotation}
+            />
+          )}
         </Suspense>
       </div>
 
@@ -262,15 +307,24 @@ export default function Index() {
             </button>
           )}
 
+          {/* Desktop AR button */}
           <button
-            className={`glass-panel px-3 py-2 flex items-center gap-2 text-xs transition-all duration-200 ${arSupported ? "btn-ghost-cyan" : "opacity-40 cursor-not-allowed"}`}
+            className={`glass-panel px-3 py-2 flex items-center gap-2 text-xs transition-all duration-200 ${
+              (isIOS && modelUrl) || arSupported ? "btn-ghost-cyan" : "opacity-40 cursor-not-allowed"
+            }`}
             onClick={handleAR}
-            disabled={!arSupported}
-            title={arSupported ? "Enter AR mode" : "AR not supported on this device"}
+            disabled={isIOS ? !modelUrl : !arSupported}
+            title={
+              isIOS
+                ? modelUrl ? "Open in AR Quick Look (iOS)" : "Load a model first"
+                : arSupported ? "Enter AR mode" : "AR not supported on this device"
+            }
           >
             <Crosshair size={12} />
             <span className="tracking-widest uppercase">
-              {arSupported === null ? "Checking..." : arSupported ? "Enter AR" : "AR N/A"}
+              {isIOS
+                ? modelUrl ? "AR Quick Look" : "AR N/A"
+                : arSupported === null ? "Checking..." : arSupported ? "Enter AR" : "AR N/A"}
             </span>
           </button>
 
@@ -414,12 +468,17 @@ export default function Index() {
         {/* AR */}
         <button
           className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-          style={{ color: arSupported ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))", opacity: arSupported ? 1 : 0.4 }}
+          style={{
+            color: (isIOS && modelUrl) || arSupported ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
+            opacity: (isIOS && modelUrl) || arSupported ? 1 : 0.4
+          }}
           onClick={handleAR}
-          disabled={!arSupported}
+          disabled={isIOS ? !modelUrl : !arSupported}
         >
           <Crosshair size={18} />
-          <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>AR</span>
+          <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>
+            {isIOS ? (modelUrl ? "QUICK LOOK" : "AR N/A") : "AR"}
+          </span>
         </button>
 
         <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
