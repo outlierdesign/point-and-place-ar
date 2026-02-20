@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Menu } from "lucide-react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
@@ -24,7 +24,7 @@ export default function Index() {
   const [newDesc, setNewDesc] = useState("");
   const [arSupported, setArSupported] = useState<boolean | null>(null);
 
-  // Mobile drawer state
+  // Drawer state (shared between mobile + desktop)
   const [modelsOpen, setModelsOpen] = useState(false);
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
 
@@ -307,50 +307,8 @@ export default function Index() {
           </span>
         </div>
 
-        {/* Desktop actions */}
+        {/* Top-right auth button — desktop only */}
         <div className="hidden md:flex items-center gap-2">
-          {isAdmin && (
-            <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={() => fileInputRef.current?.click()} title="Load a local GLTF or GLB file">
-              <FolderOpen size={12} />
-              <span className="tracking-widest uppercase text-xs">Load Local</span>
-            </button>
-          )}
-
-          {embedUrl && (
-            <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={copyEmbedUrl} title="Copy embed code">
-              <span className="text-xs tracking-widest uppercase">&lt;/&gt; Embed</span>
-            </button>
-          )}
-
-          {/* Desktop AR button */}
-          <button
-            className={`glass-panel px-3 py-2 flex items-center gap-2 text-xs transition-all duration-200 ${
-              iosArAvailable || arSupported ? "btn-ghost-cyan" : "opacity-40 cursor-not-allowed"
-            }`}
-            onClick={handleAR}
-            disabled={isIOS ? !iosArAvailable : !arSupported}
-            title={
-              isIOS
-                ? iosArAvailable
-                  ? "Open in AR Quick Look (iOS 15+)"
-                  : modelUrl && !modelUrlIsPublic
-                    ? "AR Quick Look requires a model from the library"
-                    : "Load a model first"
-                : arSupported ? "Enter AR mode" : "AR not supported on this device"
-            }
-          >
-            <Crosshair size={12} />
-            <span className="tracking-widest uppercase">
-              {isIOS
-                ? iosArAvailable ? "AR Quick Look" : "AR N/A"
-                : arSupported === null ? "Checking..." : arSupported ? "Enter AR" : "AR N/A"}
-            </span>
-          </button>
-
-          <button className="glass-panel p-2" style={{ color: "hsl(var(--muted-foreground))" }}>
-            <Maximize2 size={14} />
-          </button>
-
           {user ? (
             <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={signOut} title="Sign out">
               <LogOut size={12} />
@@ -364,66 +322,32 @@ export default function Index() {
           )}
         </div>
 
-        {/* Mobile top-right quick icons */}
-        <div className="flex md:hidden items-center gap-2">
-          <button
-            className="glass-panel p-2.5"
-            style={{ color: modelsOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
-            onClick={() => { setModelsOpen((v) => !v); setAnnotationsOpen(false); }}
-            title="Models"
-          >
-            <Menu size={16} />
-          </button>
-          <button
-            className="glass-panel p-2.5"
-            style={{ color: annotationsOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
-            onClick={() => { setAnnotationsOpen((v) => !v); setModelsOpen(false); }}
-            title="Annotations"
-          >
-            <MapPin size={16} />
-          </button>
+        {/* Mobile top-right auth icon */}
+        <div className="flex md:hidden items-center">
+          {user ? (
+            <button className="glass-panel p-2.5" style={{ color: "hsl(var(--muted-foreground))" }} onClick={signOut} title="Sign out">
+              <LogOut size={16} />
+            </button>
+          ) : (
+            <button className="glass-panel p-2.5" style={{ color: "hsl(var(--muted-foreground))" }} onClick={() => navigate("/auth")} title="Sign in">
+              <LogIn size={16} />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ── Desktop side panels ── */}
-      {/* Left panel — visible only on md+ */}
-      <div className="hidden md:flex absolute left-5 top-16 bottom-5 z-20 w-56 flex-col gap-2">
-        <ModelLibrary
-          models={models}
-          selectedModelId={selectedModelId}
-          onSelectModel={handleSelectModel}
-          onRefresh={refetchModels}
-        />
-      </div>
-
-      {/* Right panel — visible only on md+ */}
-      <div className="hidden md:flex absolute right-5 top-16 bottom-5 z-20 w-64 flex-col">
-        <AnnotationPanel
-          annotations={annotations}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onDelete={deleteAnnotation}
-          onUpdate={(id, label, desc, media_url, video_url) =>
-            updateAnnotation(id, label, desc, media_url, video_url)
-          }
-          isPlacingMode={isPlacingMode}
-          onTogglePlacingMode={() => setIsPlacingMode((v) => !v)}
-          onClearAll={clearAll}
-        />
-      </div>
-
-      {/* ── Mobile off-canvas backdrop ── */}
+      {/* ── Off-canvas backdrop (all breakpoints) ── */}
       {(modelsOpen || annotationsOpen) && (
         <div
-          className="fixed inset-0 z-30 md:hidden"
+          className="fixed inset-0 z-30"
           style={{ background: "hsl(var(--muted) / 0.5)", backdropFilter: "blur(2px)" }}
           onClick={() => { setModelsOpen(false); setAnnotationsOpen(false); }}
         />
       )}
 
-      {/* ── Mobile Models drawer (slides from left) ── */}
+      {/* ── Models drawer (slides from left, all breakpoints) ── */}
       <div
-        className={`fixed inset-y-0 left-0 z-40 md:hidden w-72 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-20 px-3`}
+        className="fixed inset-y-0 left-0 z-40 w-72 md:w-80 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-24 px-3"
         style={{ transform: modelsOpen ? "translateX(0)" : "translateX(-100%)" }}
       >
         <ModelLibrary
@@ -435,9 +359,9 @@ export default function Index() {
         />
       </div>
 
-      {/* ── Mobile Annotations drawer (slides from right) ── */}
+      {/* ── Annotations drawer (slides from right, all breakpoints) ── */}
       <div
-        className={`fixed inset-y-0 right-0 z-40 md:hidden w-72 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-20 px-3`}
+        className="fixed inset-y-0 right-0 z-40 w-72 md:w-80 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-24 px-3"
         style={{ transform: annotationsOpen ? "translateX(0)" : "translateX(100%)" }}
       >
         <AnnotationPanel
@@ -455,9 +379,9 @@ export default function Index() {
         />
       </div>
 
-      {/* ── Mobile bottom toolbar ── */}
+      {/* ── Unified bottom dock (mobile + desktop) ── */}
       <div
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center gap-1 px-3 py-2 glass-panel"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 px-3 py-2 glass-panel"
         style={{ borderColor: "hsl(var(--glass-border))" }}
       >
         {/* Models */}
@@ -493,34 +417,48 @@ export default function Index() {
           }}
           onClick={handleAR}
           disabled={isIOS ? !iosArAvailable : !arSupported}
+          title={
+            isIOS
+              ? iosArAvailable ? "Open in AR Quick Look (iOS 15+)" : "Load a library model first"
+              : arSupported ? "Enter AR mode" : "AR not supported on this device"
+          }
         >
           <Crosshair size={18} />
           <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>
-            {isIOS ? (iosArAvailable ? "QUICK LOOK" : "AR N/A") : "AR"}
+            {isIOS ? (iosArAvailable ? "QUICK LOOK" : "AR N/A") : (arSupported === null ? "AR..." : arSupported ? "AR" : "AR N/A")}
           </span>
         </button>
 
-        <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+        {/* Admin: Load Local — desktop only */}
+        {isAdmin && (
+          <>
+            <div className="hidden md:block w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+            <button
+              className="hidden md:flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+              style={{ color: "hsl(var(--muted-foreground))" }}
+              onClick={() => fileInputRef.current?.click()}
+              title="Load a local GLTF or GLB file"
+            >
+              <FolderOpen size={18} />
+              <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>LOCAL</span>
+            </button>
+          </>
+        )}
 
-        {/* Auth */}
-        {user ? (
-          <button
-            className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-            style={{ color: "hsl(var(--muted-foreground))" }}
-            onClick={signOut}
-          >
-            <LogOut size={18} />
-            <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>OUT</span>
-          </button>
-        ) : (
-          <button
-            className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-            style={{ color: "hsl(var(--muted-foreground))" }}
-            onClick={() => navigate("/auth")}
-          >
-            <LogIn size={18} />
-            <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>IN</span>
-          </button>
+        {/* Embed — desktop only */}
+        {embedUrl && (
+          <>
+            <div className="hidden md:block w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+            <button
+              className="hidden md:flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+              style={{ color: "hsl(var(--muted-foreground))" }}
+              onClick={copyEmbedUrl}
+              title="Copy embed code"
+            >
+              <Maximize2 size={18} />
+              <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>EMBED</span>
+            </button>
+          </>
         )}
       </div>
 
