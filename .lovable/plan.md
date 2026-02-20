@@ -1,84 +1,100 @@
 
-## Tooltip Redesign: Collapsed Node + Expand on Click
+## Mobile Responsive Redesign
 
-### Problem
-The current tooltip in `AnnotationPin.tsx` always renders the full label, description, thumbnail, and video button inside an `<Html>` element with `distanceFactor={6}`. Because `distanceFactor` scales the HTML relative to the camera distance, at close zoom the text becomes enormous and obstructive. There's no way to dismiss it.
+### Problems Identified from the Screenshot
+The current layout places both panels as absolutely-positioned fixed elements that are always visible, consuming the majority of the screen on mobile. The model canvas is barely visible behind two thick side panels. There is no off-canvas menu behaviour, the bottom hints overlay the view, and the top bar is overly wide on small screens.
 
-### Solution: Two-State Annotation Node
+### Solution Overview
 
-Redesign the annotation so it has two visual states:
-
-**Collapsed (default)** — A small, compact node icon. Just the sphere pin + ring that already exists in the 3D scene, with a tiny HTML label badge showing only the annotation title at a much smaller scale. This stays unobtrusive at any zoom level.
-
-**Expanded (click to toggle)** — Clicking the node opens a neat tooltip card that shows the full label, description, photo thumbnail, and video button. Clicking the node again (or clicking elsewhere) collapses it back.
+The redesign targets `src/pages/Index.tsx`, `src/components/ModelLibrary.tsx`, and `src/components/AnnotationPanel.tsx`. The 3D canvas will occupy the full viewport on mobile at all times. Both side panels become off-canvas drawers that slide in from left and right respectively. A minimal bottom toolbar replaces the cluttered top-right buttons on mobile.
 
 ---
 
-### Implementation Details
+### Detailed Changes
 
-#### `src/components/AnnotationPin.tsx`
+#### 1. `src/pages/Index.tsx` — Layout restructure
 
-**State changes:**
-- Replace the `selected` prop-driven display with a local `expanded` boolean state, toggled on click.
-- Keep `selected` for the gold glow on the sphere/ring but decouple it from the tooltip open/close.
+**Top bar (mobile):**
+- Keep the "Acres Ireland" logo badge on the left, compact.
+- Replace the row of buttons (Load Local, Embed, AR, Maximize, Sign In/Out) with a single hamburger-style icon on the right that opens the Models panel, and a separate icon on the right for Annotations.
+- On desktop (`md:` breakpoint and above), the top bar remains as-is.
 
-**Collapsed state HTML:**
-- A very small pill badge — just the annotation number or a dot icon — using `distanceFactor={8}` (smaller = physically smaller in scene space).
-- Font size: `9px`, padding `2px 6px`, no description, no media.
-- A subtle "+" icon or circle indicator so users know it's clickable.
+**Side panels → Off-canvas drawers:**
+- Add two boolean states: `modelsOpen` and `annotationsOpen`.
+- Both panels use a CSS `translate-x` approach — they slide in over the canvas from left (Models) and right (Annotations).
+- A backdrop overlay (`z-30`, semi-opaque) appears behind an open drawer and closes it on tap.
+- Both drawers have an `×` close button inside the panel header.
 
-**Expanded state HTML:**
-- Full card with label, description, photo thumbnail, and video button.
-- Uses `distanceFactor={6}` (same as now) but capped `maxWidth: 180px`.
-- Font sizes reduced: label at `11px` (down from implicit ~14px), description at `9px`.
-- An "×" close button in the top-right corner of the card.
+**Bottom toolbar (mobile only, `md:hidden`):**
+- A slim glassmorphic bar pinned to the bottom with 4 icon buttons:
+  - `Layers` → toggle Models panel
+  - `MapPin` → toggle Annotations panel
+  - `Crosshair` → AR (grayed out if not supported)
+  - `LogIn/LogOut` → auth
 
-**Click behaviour:**
-- Clicking the sphere mesh → `onSelect(id)` AND toggle `expanded`.
-- Clicking the label badge → same toggle.
-- Clicking the "×" close button → collapse without deselecting.
+**Controls hint (mobile):**
+- Hide the bottom-left controls hint on mobile (`hidden md:block`) — it's too cluttered on small screens.
 
-**`distanceFactor` approach:**
-The key insight is that `distanceFactor` in `@react-three/drei` `<Html>` makes the element scale proportionally with distance — closer = bigger. The current value of `6` is too large for close zoom. We split into two `<Html>` elements:
-1. A persistent tiny dot/badge at `distanceFactor={5}` — always visible, never obtrusive.
-2. A conditionally rendered expanded card at `distanceFactor={5}` positioned slightly offset.
+**Touch/orbit for mobile:**
+- The Three.js `OrbitControls` already supports touch — single finger orbit, two-finger pinch-to-zoom, and two-finger pan. No code changes needed.
+- Remove `enabled={!isPlacingMode}` restriction while keeping placing mode cursor behaviour (crosshair on desktop, tap on mobile).
 
-**Reduced font sizes:**
-- Label: `11px → 10px` in expanded, badge shows at `8px`
-- Description: `10px → 9px`
-- Video button: `9px → 8px`
+**AR support (mobile):**
+- Keep the existing `navigator.xr` check; WebXR AR works on Chrome Android. On iOS Safari it is not yet widely supported. No code changes needed beyond surfacing the button on mobile.
 
 ---
 
-### Visual Structure
+#### 2. `src/components/ModelLibrary.tsx`
+
+- Add a close button (`X`) to the panel header so users can close the drawer from within the panel on mobile.
+- Accept an optional `onClose?: () => void` prop and render the `×` button in the header when provided.
+
+#### 3. `src/components/AnnotationPanel.tsx`
+
+- Same as above — accept optional `onClose?: () => void` prop and render a close `×` button in the header.
+
+---
+
+### Visual Structure (Mobile)
 
 ```text
-COLLAPSED:
-  [●]  ← 3D sphere mesh (gold dot)
-  [6ft long planks +]  ← tiny HTML badge (8px, compact)
+┌──────────────────────────────┐
+│ [≡] Acres Ireland    [☰] [📍]│  ← top bar (compact)
+│                              │
+│                              │
+│       3D Model Canvas        │  ← full screen
+│        (orbit/pinch)         │
+│                              │
+│                              │
+│ [Models] [Pins] [AR] [Auth]  │  ← bottom toolbar (mobile only)
+└──────────────────────────────┘
 
-EXPANDED (after click):
-  [●]
-  ┌──────────────────┐
-  │ 6ft long planks ×│  ← 10px bold gold, close button
-  │ Bury these at... │  ← 9px muted
-  │ [photo thumb]    │
-  │ [▶ Play Video]   │
-  └──────────────────┘
+Models drawer (slides in from left):
+┌───────────────┐
+│ Models    [×] │
+│ ─────────── │
+│ [model cards] │
+│               │
+│ [Upload]      │
+└───────────────┘
+
+Annotations drawer (slides from right):
+         ┌───────────────┐
+         │ [×] Annotations│
+         │ ────────────── │
+         │ [ann list]     │
+         │ [Add Ann btn]  │
+         └───────────────┘
 ```
 
 ---
 
 ### Files to Change
 
-Only **`src/components/AnnotationPin.tsx`** needs editing:
+| File | Change |
+|---|---|
+| `src/pages/Index.tsx` | Add `modelsOpen`/`annotationsOpen` state; add mobile bottom toolbar; make panels slide off-canvas on mobile; hide controls hint on mobile |
+| `src/components/ModelLibrary.tsx` | Accept `onClose?` prop; add close button to header |
+| `src/components/AnnotationPanel.tsx` | Accept `onClose?` prop; add close button to header |
 
-1. Add local `expanded` state (`useState(false)`).
-2. Toggle `expanded` in the sphere `onClick` handler alongside `onSelect`.
-3. Replace the single always-on tooltip `<Html>` block with:
-   - A compact badge `<Html>` that is always rendered (collapsed view) — shows label + "+" if not expanded, "×" if expanded.
-   - A full card `<Html>` that is conditionally rendered only when `expanded === true`.
-4. Reduce all font sizes by ~1–2px across the expanded card.
-5. Keep lightbox portals exactly as-is inside the expanded `<Html>`.
-
-No database changes, no other files need editing.
+No database changes. No new dependencies needed — uses existing Tailwind CSS responsive utilities and CSS `transition-transform`.
