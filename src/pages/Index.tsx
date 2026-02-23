@@ -214,34 +214,26 @@ export default function Index() {
   };
 
   const handleExportUSDZ = async () => {
-    if (!selectedModelId || exporting) return;
+    if (!modelUrl || exporting) return;
     setExporting(true);
     try {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const resp = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/export-usdz?model_id=${selectedModelId}`,
-        { headers: { "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY } }
-      );
-      const data = await resp.json();
-      if (!resp.ok || !data.url) {
-        alert("Export failed: " + (data.error || "Unknown error"));
-        return;
-      }
-      // iOS: use AR Quick Look with the exported URL
-      if (isIOS) {
+      if (isIOS && modelUrlIsPublic) {
+        // iOS: open in AR Quick Look using direct URL with #.usdz hint
         const anchor = arQuickLookRef.current;
         if (anchor) {
-          anchor.href = data.url;
+          anchor.href = modelUrl + "#.usdz";
           anchor.style.pointerEvents = "auto";
           anchor.click();
           anchor.style.pointerEvents = "none";
         }
       } else {
-        // Other devices: download
+        // All platforms: direct download
         const a = document.createElement("a");
-        a.href = data.url;
+        a.href = modelUrl;
         a.download = `${modelName || "model"}.glb`;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
       }
     } catch (err) {
       alert("Export failed: " + String(err));
@@ -287,8 +279,8 @@ export default function Index() {
       <a
         ref={arQuickLookRef}
         rel="ar"
-        href={modelUrlIsPublic ? modelUrl! : undefined}
-        style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none" }}
+        href={modelUrlIsPublic ? modelUrl! + "#.usdz" : undefined}
+        style={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", opacity: 0, pointerEvents: "none", clip: "rect(0,0,0,0)" }}
       >
         <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAABJRU5ErkJggg==" alt="" />
       </a>
