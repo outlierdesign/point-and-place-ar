@@ -102,6 +102,7 @@ function CursorSetter({ isPlacingMode }: { isPlacingMode: boolean }) {
 function KeyboardControls({ enabled }: { enabled: boolean }) {
   const { camera } = useThree();
   const keys = useRef<Set<string>>(new Set());
+  const velocity = useRef(new THREE.Vector3());
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
@@ -119,25 +120,29 @@ function KeyboardControls({ enabled }: { enabled: boolean }) {
   }, []);
 
   useFrame((_, delta) => {
-    if (!enabled || keys.current.size === 0) return;
-    const speed = 3 * delta;
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
-    forward.y = 0;
-    forward.normalize();
-    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+    const accel = 8;
+    const damping = 0.88;
+    const target = new THREE.Vector3();
 
-    if (keys.current.has("w") || keys.current.has("ArrowUp")) {
-      camera.position.addScaledVector(forward, speed);
+    if (enabled && keys.current.size > 0) {
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      forward.normalize();
+      const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+
+      if (keys.current.has("w") || keys.current.has("ArrowUp")) target.addScaledVector(forward, 1);
+      if (keys.current.has("s") || keys.current.has("ArrowDown")) target.addScaledVector(forward, -1);
+      if (keys.current.has("a") || keys.current.has("ArrowLeft")) target.addScaledVector(right, -1);
+      if (keys.current.has("d") || keys.current.has("ArrowRight")) target.addScaledVector(right, 1);
+      if (target.lengthSq() > 0) target.normalize();
+      velocity.current.addScaledVector(target, accel * delta);
     }
-    if (keys.current.has("s") || keys.current.has("ArrowDown")) {
-      camera.position.addScaledVector(forward, -speed);
-    }
-    if (keys.current.has("a") || keys.current.has("ArrowLeft")) {
-      camera.position.addScaledVector(right, -speed);
-    }
-    if (keys.current.has("d") || keys.current.has("ArrowRight")) {
-      camera.position.addScaledVector(right, speed);
+
+    velocity.current.multiplyScalar(damping);
+
+    if (velocity.current.lengthSq() > 0.00001) {
+      camera.position.addScaledVector(velocity.current, delta);
     }
   });
 
