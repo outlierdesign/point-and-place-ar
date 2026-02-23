@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin } from "lucide-react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
@@ -34,6 +34,7 @@ export default function Index() {
   const [modelName, setModelName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
@@ -209,6 +210,43 @@ export default function Index() {
       alert("AR session started! Full AR integration requires a mobile device with ARCore support.");
     } catch {
       alert("Could not start AR session. Please use a compatible mobile device with ARCore.");
+    }
+  };
+
+  const handleExportUSDZ = async () => {
+    if (!selectedModelId || exporting) return;
+    setExporting(true);
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const resp = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/export-usdz?model_id=${selectedModelId}`,
+        { headers: { "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY } }
+      );
+      const data = await resp.json();
+      if (!resp.ok || !data.url) {
+        alert("Export failed: " + (data.error || "Unknown error"));
+        return;
+      }
+      // iOS: use AR Quick Look with the exported URL
+      if (isIOS) {
+        const anchor = arQuickLookRef.current;
+        if (anchor) {
+          anchor.href = data.url;
+          anchor.style.pointerEvents = "auto";
+          anchor.click();
+          anchor.style.pointerEvents = "none";
+        }
+      } else {
+        // Other devices: download
+        const a = document.createElement("a");
+        a.href = data.url;
+        a.download = `${modelName || "model"}.glb`;
+        a.click();
+      }
+    } catch (err) {
+      alert("Export failed: " + String(err));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -428,6 +466,25 @@ export default function Index() {
             {isIOS ? (iosArAvailable ? "QUICK LOOK" : "AR N/A") : (arSupported === null ? "AR..." : arSupported ? "AR" : "AR N/A")}
           </span>
         </button>
+
+        {/* Export — visible when a library model is selected */}
+        {selectedModelId && (
+          <>
+            <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+            <button
+              className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+              style={{ color: exporting ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+              onClick={handleExportUSDZ}
+              disabled={exporting}
+              title="Export model for download / AR Quick Look"
+            >
+              {exporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+              <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>
+                {exporting ? "EXPORTING" : "EXPORT"}
+              </span>
+            </button>
+          </>
+        )}
 
         {/* Admin: Load Local — desktop only */}
         {isAdmin && (
