@@ -1,137 +1,78 @@
 
 
-## Fix AR Quick Look + Add Offline PWA Support
+## Fix AR Quick Look "Object Can't Be Viewed" Error
 
-### Part 1: Fix the AR Quick Look / Export Button
+### Root Cause Analysis
 
-**Current problems:**
+There are three separate issues preventing AR Quick Look from working:
 
-1. The hidden `<a rel="ar">` anchor has an `<img alt="AR" />` child with no `src` attribute. Safari requires the anchor's first child to be an `<img>` with a valid `src` to recognise the link as an AR Quick Look trigger.
-2. The `export-usdz` edge function does not convert to USDZ -- it just re-uploads the GLB to the `exports` bucket. While iOS 15+ can open GLB files in Quick Look, the anchor must be correctly formed.
-3. The exported file URL ends in `.glb` which is fine for iOS 15+, but adding a proper `<img>` child with a 1x1 transparent PNG data URI will fix Safari's detection.
+**Issue 1: Content-Type headers on the GLB file URL**
+When Safari opens a GLB via AR Quick Look, it checks the `Content-Type` response header. The storage bucket serves files with whatever MIME type was set at upload time. If the GLB was uploaded without specifying `Content-Type: model/gltf-binary`, it may be served as `application/octet-stream`, which Safari rejects with "object can't be viewed."
 
-**Fixes in `src/pages/Index.tsx`:**
+**Issue 2: The hidden anchor's zero dimensions**
+The current anchor has `width: 0, height: 0`. While this works on some iOS versions, Apple's documentation recommends keeping the element at least 1x1 pixel. Some Safari versions ignore zero-dimension elements even if they're in the DOM.
 
-- Give the `<img>` child of the AR Quick Look anchor a valid `src` (a transparent 1x1 pixel data URI). This is the standard pattern recommended by Apple for programmatic AR Quick Look triggers.
-- Ensure the anchor `href` always has a `.glb` or `.usdz` extension so Safari identifies it as a 3D model.
-
-Before:
-```html
-<a ref={arQuickLookRef} rel="ar" href={...}>
-  <img alt="AR" />
-</a>
-```
-
-After:
-```html
-<a ref={arQuickLookRef} rel="ar" href={...}>
-  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualzQAAAABJRU5ErkJggg==" alt="" />
-</a>
-```
-
-- Also update `handleExportUSDZ` so on iOS it sets the anchor `href` and clicks it, and on non-iOS it downloads the file correctly.
+**Issue 3: The export edge function is not reachable**
+The `export-usdz` function deploys but returns 404. The `config.toml` only contains the project ID and has no function configuration. This needs `verify_jwt = false` to be called without authentication from the frontend.
 
 ---
 
-### Part 2: Progressive Web App (PWA) for Offline Use
+### Fix Plan
 
-**What this enables:**
+#### 1. Fix the AR Quick Look anchor in `src/pages/Index.tsx`
 
-- Users can install the app to their home screen from Safari (iOS) or Chrome (Android/desktop)
-- The service worker caches the app shell (HTML, CSS, JS) for instant offline loading
-- Models can be cached as they are viewed, so previously loaded models work offline
-- AR Quick Look still works offline on iOS because the model file is served from the local cache
+- Change the anchor's hidden style from `width: 0, height: 0` to `width: 1, height: 1` with `clip: rect(0,0,0,0)` (the standard visually-hidden pattern that keeps the element "real" for Safari)
+- Ensure the `<img>` child has a proper transparent PNG data URI (already done in last diff -- confirmed correct)
 
-**Implementation:**
+#### 2. Bypass the edge function for QUICK LOOK -- use direct model URL
 
-#### 2a. Install `vite-plugin-pwa`
+The "QUICK LOOK" button (handleAR) already uses the direct storage URL. The problem is likely the Content-Type of the stored GLB file. Two fixes:
 
-Add the `vite-plugin-pwa` package as a dependency.
+**a) Add a `#.usdz` fragment to the URL**
+Apple's AR Quick Look documentation states that appending `#.usdz` to any URL forces Safari to treat it as an AR model, regardless of the Content-Type header. This is the simplest and most reliable fix:
 
-#### 2b. Configure `vite.config.ts`
+```tsx
+// Before
+anchor.href = modelUrl;
 
-Add the PWA plugin with:
-
-- A manifest including app name ("Acres Ireland"), theme colour, icons
-- Workbox runtime caching strategy for Supabase storage URLs (models, thumbnails) using `CacheFirst` with a size/age limit
-- `navigateFallbackDenylist: [/^\/~oauth/]` to ensure OAuth redirects always hit the network
-- Precaching of the app shell
-
-```ts
-import { VitePWA } from "vite-plugin-pwa";
-
-// Inside plugins array:
-VitePWA({
-  registerType: "autoUpdate",
-  manifest: {
-    name: "Acres Ireland - 3D Model Viewer",
-    short_name: "Acres Ireland",
-    description: "AR Landscape Actions Viewer",
-    theme_color: "#0a1628",
-    background_color: "#0a1628",
-    display: "standalone",
-    start_url: "/",
-    icons: [
-      { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
-      { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },
-    ],
-  },
-  workbox: {
-    navigateFallbackDenylist: [/^\/~oauth/],
-    runtimeCaching: [
-      {
-        urlPattern: /\/storage\/v1\/object\/public\/(models|thumbnails|exports)\//,
-        handler: "CacheFirst",
-        options: {
-          cacheName: "model-assets",
-          expiration: { maxEntries: 20, maxAgeSeconds: 30 * 24 * 60 * 60 },
-          cacheableResponse: { statuses: [0, 200] },
-        },
-      },
-    ],
-  },
-})
+// After  
+anchor.href = modelUrl + "#.usdz";
 ```
 
-#### 2c. Update `index.html`
+This single change should resolve the "object can't be viewed" error without needing any server-side changes.
 
-Add mobile-optimised meta tags:
+**b) Update the anchor href dynamically**
+Currently the anchor's `href` is set statically via JSX (`href={modelUrlIsPublic ? modelUrl! : undefined}`). When the user taps QUICK LOOK, the `handleAR` function clicks the anchor but doesn't update the href. The href should always include the `#.usdz` suffix.
 
-```html
-<meta name="theme-color" content="#0a1628" />
-<link rel="apple-touch-icon" href="/pwa-192x192.png" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-```
+#### 3. Fix the EXPORT button flow
 
-#### 2d. Create PWA icons
+The EXPORT button calls the edge function which isn't working. Two options:
 
-Create placeholder icons at `public/pwa-192x192.png` and `public/pwa-512x512.png`. These can be simple branded icons with the Acres Ireland logo/text.
+**Option A (simpler)**: Skip the edge function entirely for now. The EXPORT button can directly use the model's public storage URL with a `#.usdz` suffix for iOS, or trigger a download for other platforms. This removes the server-side dependency.
 
-#### 2e. Offline indicator (optional but recommended)
+**Option B**: Fix the edge function deployment. This requires the config.toml to have `[functions.export-usdz] verify_jwt = false`, but since config.toml is auto-managed, we'd need to validate JWT in code instead and call without auth requirement.
 
-Add a small banner or toast that appears when the user is offline, so they know they are working from cached data. New models from the library won't load until they reconnect, but previously viewed models will work.
+Recommend **Option A** since the edge function's only job currently is to re-upload the GLB (no actual conversion).
+
+#### 4. Simplify the export/AR flow
+
+Merge the QUICK LOOK and EXPORT buttons into a cleaner flow:
+- On iOS: the existing "QUICK LOOK" button opens AR Quick Look using the direct URL with `#.usdz`
+- The "EXPORT" button triggers a standard download of the GLB file (works on all platforms)
+- Remove the edge function dependency for now
 
 ---
 
-### Files to Create / Change
+### Changes Summary
 
-| File | Action | Purpose |
-|---|---|---|
-| `src/pages/Index.tsx` | Modify | Fix AR Quick Look anchor (add valid img src); minor export handler tweaks |
-| `vite.config.ts` | Modify | Add vite-plugin-pwa configuration with manifest and workbox caching |
-| `index.html` | Modify | Add PWA meta tags (theme-color, apple-touch-icon, apple-mobile-web-app) |
-| `public/pwa-192x192.png` | Create | PWA icon (192x192) |
-| `public/pwa-512x512.png` | Create | PWA icon (512x512) |
-| `package.json` | Modify | Add vite-plugin-pwa dependency |
+| File | Change |
+|---|---|
+| `src/pages/Index.tsx` | Fix anchor hidden style (use clip instead of zero dimensions); append `#.usdz` to AR Quick Look URLs; simplify EXPORT to direct download without edge function |
 
-### How Offline AR Works
+### Technical Detail
 
-Once the PWA is installed and a model has been viewed at least once:
-
-1. The service worker caches the GLB file from the storage URL
-2. When offline, the app loads from cache
-3. The model renders in the 3D viewer from the cached GLB
-4. On iOS, tapping "QUICK LOOK" points the AR anchor at the same cached URL -- Safari's AR Quick Look can still open it from the service worker cache
-5. Annotations stored in the database won't sync while offline, but previously loaded annotations remain in the React Query cache for the session
-
+The `#.usdz` URL fragment trick is documented by Apple:
+- Safari checks the URL (including fragment) to determine if it should launch AR Quick Look
+- The fragment does not affect the actual HTTP request (fragments are never sent to the server)
+- The server still returns the GLB binary, but Safari treats it as an AR-compatible model
+- This works with both GLB and USDZ files on iOS 15+
