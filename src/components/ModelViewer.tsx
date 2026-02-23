@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useMemo } from "react";
 import { Canvas, useThree, ThreeEvent } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -6,7 +6,7 @@ import {
   Grid,
   ContactShadows,
   useGLTF,
-  Center,
+  Bounds,
 } from "@react-three/drei";
 import * as THREE from "three";
 import AnnotationPin, { Annotation } from "./AnnotationPin";
@@ -23,12 +23,16 @@ function SceneModel({
   const { scene } = useGLTF(url);
   const ref = useRef<THREE.Group>(null);
 
-  // Clone scene so multiple renders of the same URL don't share state
-  const cloned = useRef<THREE.Group | null>(null);
-  if (!cloned.current || cloned.current.userData.__sourceUrl !== url) {
-    cloned.current = scene.clone(true);
-    cloned.current.userData.__sourceUrl = url;
-  }
+  // Compute a uniform scale so the model fits within ~4 world units
+  const normalizedScale = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim === 0) return 1;
+    const targetSize = 4;
+    return targetSize / maxDim;
+  }, [scene]);
 
   const handleClick = useCallback(
     (e: ThreeEvent<MouseEvent>) => {
@@ -45,11 +49,11 @@ function SceneModel({
   );
 
   return (
-    <Center>
+    <group scale={[normalizedScale, normalizedScale, normalizedScale]}>
       <group ref={ref} onClick={handleClick}>
         <primitive object={scene} />
       </group>
-    </Center>
+    </group>
   );
 }
 
@@ -63,14 +67,14 @@ function SceneBackground() {
 
       <Grid
         position={[0, -1.2, 0]}
-        args={[20, 20]}
+        args={[40, 40]}
         cellSize={0.5}
         cellThickness={0.4}
         cellColor="#0d3344"
         sectionSize={2}
         sectionThickness={0.8}
         sectionColor="#00a8cc"
-        fadeDistance={12}
+        fadeDistance={25}
         fadeStrength={1.5}
         infiniteGrid
       />
@@ -78,7 +82,7 @@ function SceneBackground() {
       <ContactShadows
         position={[0, -1.19, 0]}
         opacity={0.5}
-        scale={6}
+        scale={15}
         blur={2}
         far={3}
         color="#001824"
@@ -119,20 +123,21 @@ export default function ModelViewer({
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 0.5, 3], fov: 45 }}
+      camera={{ position: [0, 2, 6], fov: 50 }}
       gl={{ antialias: true, alpha: false }}
       style={{ background: "transparent" }}
     >
       <SceneBackground />
       <CursorSetter isPlacingMode={isPlacingMode} />
 
-      {/* key forces remount when model changes, clearing useGLTF cache per URL */}
-      <SceneModel
-        key={modelKey}
-        url={modelUrl}
-        isPlacingMode={isPlacingMode}
-        onPlace={onPlace}
-      />
+      <Bounds fit clip observe margin={1.5}>
+        <SceneModel
+          key={modelKey}
+          url={modelUrl}
+          isPlacingMode={isPlacingMode}
+          onPlace={onPlace}
+        />
+      </Bounds>
 
       {annotations.map((ann) => (
         <AnnotationPin
@@ -148,11 +153,10 @@ export default function ModelViewer({
         makeDefault
         enableDamping
         dampingFactor={0.05}
-        minDistance={0.5}
-        maxDistance={20}
+        minDistance={0.2}
+        maxDistance={200}
         enabled={!isPlacingMode}
       />
     </Canvas>
   );
 }
-
