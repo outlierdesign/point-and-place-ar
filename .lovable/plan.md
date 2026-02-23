@@ -1,78 +1,59 @@
 
 
-## Fix AR Quick Look "Object Can't Be Viewed" Error
+## Fix Model Scaling and Zoom for Large Models
 
-### Root Cause Analysis
+### Problem
 
-There are three separate issues preventing AR Quick Look from working:
+The "Glashapullagh Jan 2025 cropped" model is very large in world units, so it fills the entire 3D canvas. The current settings prevent zooming out far enough to see the full model because:
 
-**Issue 1: Content-Type headers on the GLB file URL**
-When Safari opens a GLB via AR Quick Look, it checks the `Content-Type` response header. The storage bucket serves files with whatever MIME type was set at upload time. If the GLB was uploaded without specifying `Content-Type: model/gltf-binary`, it may be served as `application/octet-stream`, which Safari rejects with "object can't be viewed."
+- The camera's maximum zoom-out distance is capped at 20 units
+- The field of view is a narrow 45 degrees
+- The model is centered but not scaled down to fit the viewport
+- The camera starts very close at only 3 units away
 
-**Issue 2: The hidden anchor's zero dimensions**
-The current anchor has `width: 0, height: 0`. While this works on some iOS versions, Apple's documentation recommends keeping the element at least 1x1 pixel. Some Safari versions ignore zero-dimension elements even if they're in the DOM.
+### Solution
 
-**Issue 3: The export edge function is not reachable**
-The `export-usdz` function deploys but returns 404. The `config.toml` only contains the project ID and has no function configuration. This needs `verify_jwt = false` to be called without authentication from the frontend.
+Two changes in `src/components/ModelViewer.tsx`:
 
----
+**1. Auto-fit the model to the viewport**
 
-### Fix Plan
+Replace the bare `<Center>` wrapper with a version that automatically scales any model to fit within a consistent bounding sphere. After loading, the model's bounding box is measured, and it is uniformly scaled so that even massive terrain models appear at a manageable size in the viewer.
 
-#### 1. Fix the AR Quick Look anchor in `src/pages/Index.tsx`
+This uses drei's `<Bounds>` component which automatically adjusts the camera to fit the model, combined with a manual scale normalization to keep all models at a consistent visual size regardless of their original dimensions.
 
-- Change the anchor's hidden style from `width: 0, height: 0` to `width: 1, height: 1` with `clip: rect(0,0,0,0)` (the standard visually-hidden pattern that keeps the element "real" for Safari)
-- Ensure the `<img>` child has a proper transparent PNG data URI (already done in last diff -- confirmed correct)
+**2. Increase zoom range and widen field of view**
 
-#### 2. Bypass the edge function for QUICK LOOK -- use direct model URL
+| Setting | Current | New |
+|---|---|---|
+| Camera FOV | 45 | 50 |
+| Camera start position | [0, 0.5, 3] | [0, 2, 6] |
+| OrbitControls maxDistance | 20 | 200 |
+| OrbitControls minDistance | 0.5 | 0.2 |
 
-The "QUICK LOOK" button (handleAR) already uses the direct storage URL. The problem is likely the Content-Type of the stored GLB file. Two fixes:
+**3. Scale the grid and shadows to match**
 
-**a) Add a `#.usdz` fragment to the URL**
-Apple's AR Quick Look documentation states that appending `#.usdz` to any URL forces Safari to treat it as an AR model, regardless of the Content-Type header. This is the simplest and most reliable fix:
-
-```tsx
-// Before
-anchor.href = modelUrl;
-
-// After  
-anchor.href = modelUrl + "#.usdz";
-```
-
-This single change should resolve the "object can't be viewed" error without needing any server-side changes.
-
-**b) Update the anchor href dynamically**
-Currently the anchor's `href` is set statically via JSX (`href={modelUrlIsPublic ? modelUrl! : undefined}`). When the user taps QUICK LOOK, the `handleAR` function clicks the anchor but doesn't update the href. The href should always include the `#.usdz` suffix.
-
-#### 3. Fix the EXPORT button flow
-
-The EXPORT button calls the edge function which isn't working. Two options:
-
-**Option A (simpler)**: Skip the edge function entirely for now. The EXPORT button can directly use the model's public storage URL with a `#.usdz` suffix for iOS, or trigger a download for other platforms. This removes the server-side dependency.
-
-**Option B**: Fix the edge function deployment. This requires the config.toml to have `[functions.export-usdz] verify_jwt = false`, but since config.toml is auto-managed, we'd need to validate JWT in code instead and call without auth requirement.
-
-Recommend **Option A** since the edge function's only job currently is to re-upload the GLB (no actual conversion).
-
-#### 4. Simplify the export/AR flow
-
-Merge the QUICK LOOK and EXPORT buttons into a cleaner flow:
-- On iOS: the existing "QUICK LOOK" button opens AR Quick Look using the direct URL with `#.usdz`
-- The "EXPORT" button triggers a standard download of the GLB file (works on all platforms)
-- Remove the edge function dependency for now
+Increase the grid size and shadow scale so they remain visible when zoomed out on large models.
 
 ---
 
-### Changes Summary
+### Technical Details
 
-| File | Change |
-|---|---|
-| `src/pages/Index.tsx` | Fix anchor hidden style (use clip instead of zero dimensions); append `#.usdz` to AR Quick Look URLs; simplify EXPORT to direct download without edge function |
+**File: `src/components/ModelViewer.tsx`**
 
-### Technical Detail
+In the `SceneModel` component:
+- After loading the GLB scene, compute its bounding box using `THREE.Box3`
+- Calculate the maximum dimension of the model
+- Apply a uniform scale factor so the model fits within roughly 4 world units (a comfortable viewing size)
+- This means small models stay the same size, but large terrain models like Glashapullagh get scaled down automatically
 
-The `#.usdz` URL fragment trick is documented by Apple:
-- Safari checks the URL (including fragment) to determine if it should launch AR Quick Look
-- The fragment does not affect the actual HTTP request (fragments are never sent to the server)
-- The server still returns the GLB binary, but Safari treats it as an AR-compatible model
-- This works with both GLB and USDZ files on iOS 15+
+In the `Canvas` and `OrbitControls`:
+- Widen FOV from 45 to 50 for a broader view
+- Pull the camera back from `[0, 0.5, 3]` to `[0, 2, 6]`
+- Increase `maxDistance` from 20 to 200 so users can zoom out much further
+- Decrease `minDistance` from 0.5 to 0.2 for closer inspection
+
+In `SceneBackground`:
+- Increase grid size from 20x20 to 40x40
+- Increase grid `fadeDistance` from 12 to 25
+- Increase `ContactShadows` scale from 6 to 15
+
