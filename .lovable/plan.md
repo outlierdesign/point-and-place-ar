@@ -1,102 +1,137 @@
 
 
-## Export USDZ for AR Quick Look on Apple Devices
+## Fix AR Quick Look + Add Offline PWA Support
 
-### Overview
+### Part 1: Fix the AR Quick Look / Export Button
 
-Add a backend function that converts the currently loaded GLB model to USDZ format, and a frontend "EXPORT" button in the bottom dock. On iOS/iPadOS, this will open the USDZ directly in AR Quick Look. On other devices, it will download the file.
+**Current problems:**
 
-This is a plain GLB-to-USDZ conversion (no annotation baking) -- keeping it simple and reliable.
+1. The hidden `<a rel="ar">` anchor has an `<img alt="AR" />` child with no `src` attribute. Safari requires the anchor's first child to be an `<img>` with a valid `src` to recognise the link as an AR Quick Look trigger.
+2. The `export-usdz` edge function does not convert to USDZ -- it just re-uploads the GLB to the `exports` bucket. While iOS 15+ can open GLB files in Quick Look, the anchor must be correctly formed.
+3. The exported file URL ends in `.glb` which is fine for iOS 15+, but adding a proper `<img>` child with a 1x1 transparent PNG data URI will fix Safari's detection.
+
+**Fixes in `src/pages/Index.tsx`:**
+
+- Give the `<img>` child of the AR Quick Look anchor a valid `src` (a transparent 1x1 pixel data URI). This is the standard pattern recommended by Apple for programmatic AR Quick Look triggers.
+- Ensure the anchor `href` always has a `.glb` or `.usdz` extension so Safari identifies it as a 3D model.
+
+Before:
+```html
+<a ref={arQuickLookRef} rel="ar" href={...}>
+  <img alt="AR" />
+</a>
+```
+
+After:
+```html
+<a ref={arQuickLookRef} rel="ar" href={...}>
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualzQAAAABJRU5ErkJggg==" alt="" />
+</a>
+```
+
+- Also update `handleExportUSDZ` so on iOS it sets the anchor `href` and clicks it, and on non-iOS it downloads the file correctly.
 
 ---
 
-### Architecture
+### Part 2: Progressive Web App (PWA) for Offline Use
 
-```text
-User taps "EXPORT" in bottom dock
-        |
-        v
-Frontend calls edge function: export-usdz?model_id=xxx
-        |
-        v
-Edge function:
-  1. Checks if a cached USDZ already exists in the "exports" bucket
-  2. If not, fetches GLB from "models" bucket
-  3. Converts GLB to USDZ using Three.js USDZExporter (runs on CPU, no GPU needed)
-  4. Uploads USDZ to "exports" bucket
-  5. Returns public URL
-        |
-        v
-Frontend receives USDZ URL:
-  - iOS: updates the AR Quick Look anchor href and clicks it (launches native AR)
-  - Other: triggers a file download
+**What this enables:**
+
+- Users can install the app to their home screen from Safari (iOS) or Chrome (Android/desktop)
+- The service worker caches the app shell (HTML, CSS, JS) for instant offline loading
+- Models can be cached as they are viewed, so previously loaded models work offline
+- AR Quick Look still works offline on iOS because the model file is served from the local cache
+
+**Implementation:**
+
+#### 2a. Install `vite-plugin-pwa`
+
+Add the `vite-plugin-pwa` package as a dependency.
+
+#### 2b. Configure `vite.config.ts`
+
+Add the PWA plugin with:
+
+- A manifest including app name ("Acres Ireland"), theme colour, icons
+- Workbox runtime caching strategy for Supabase storage URLs (models, thumbnails) using `CacheFirst` with a size/age limit
+- `navigateFallbackDenylist: [/^\/~oauth/]` to ensure OAuth redirects always hit the network
+- Precaching of the app shell
+
+```ts
+import { VitePWA } from "vite-plugin-pwa";
+
+// Inside plugins array:
+VitePWA({
+  registerType: "autoUpdate",
+  manifest: {
+    name: "Acres Ireland - 3D Model Viewer",
+    short_name: "Acres Ireland",
+    description: "AR Landscape Actions Viewer",
+    theme_color: "#0a1628",
+    background_color: "#0a1628",
+    display: "standalone",
+    start_url: "/",
+    icons: [
+      { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+      { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+  },
+  workbox: {
+    navigateFallbackDenylist: [/^\/~oauth/],
+    runtimeCaching: [
+      {
+        urlPattern: /\/storage\/v1\/object\/public\/(models|thumbnails|exports)\//,
+        handler: "CacheFirst",
+        options: {
+          cacheName: "model-assets",
+          expiration: { maxEntries: 20, maxAgeSeconds: 30 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [0, 200] },
+        },
+      },
+    ],
+  },
+})
 ```
+
+#### 2c. Update `index.html`
+
+Add mobile-optimised meta tags:
+
+```html
+<meta name="theme-color" content="#0a1628" />
+<link rel="apple-touch-icon" href="/pwa-192x192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+```
+
+#### 2d. Create PWA icons
+
+Create placeholder icons at `public/pwa-192x192.png` and `public/pwa-512x512.png`. These can be simple branded icons with the Acres Ireland logo/text.
+
+#### 2e. Offline indicator (optional but recommended)
+
+Add a small banner or toast that appears when the user is offline, so they know they are working from cached data. New models from the library won't load until they reconnect, but previously viewed models will work.
 
 ---
-
-### Changes
-
-#### 1. New storage bucket: `exports`
-
-A public bucket for cached USDZ files. Created via SQL migration.
-
-```sql
-INSERT INTO storage.buckets (id, name, public) VALUES ('exports', 'exports', true);
-
-CREATE POLICY "Anyone can read exports"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'exports');
-
-CREATE POLICY "Service role can write exports"
-  ON storage.objects FOR INSERT
-  WITH CHECK (bucket_id = 'exports');
-```
-
-#### 2. New edge function: `export-usdz`
-
-File: `supabase/functions/export-usdz/index.ts`
-
-- Accepts `model_id` query parameter
-- Fetches the model record from the `models` table to get `storage_path`
-- Checks if `exports/{model_id}.usdz` already exists; if so, returns its public URL immediately
-- Otherwise, downloads the GLB from the `models` bucket
-- Uses Three.js (imported via `npm:three`) and the `USDZExporter` to convert the GLB scene to USDZ
-- Uploads the result to `exports/{model_id}.usdz`
-- Returns JSON: `{ url: "https://.../{model_id}.usdz" }`
-
-Config addition to `supabase/config.toml`:
-```toml
-[functions.export-usdz]
-verify_jwt = false
-```
-
-#### 3. Frontend: `src/pages/Index.tsx`
-
-- Add `Download` icon import from lucide-react
-- Add `exporting` boolean state for loading feedback
-- Add `handleExportUSDZ` function that:
-  - Calls the edge function with `selectedModelId`
-  - On iOS: sets the AR Quick Look anchor's `href` to the returned USDZ URL and clicks it
-  - On other devices: opens the URL in a new tab (triggers download)
-- Add an "EXPORT" button to the bottom dock (between AR and LOCAL/EMBED), visible when a library model is selected
-- The button shows a spinner while exporting
-
----
-
-### Technical Details
-
-**Three.js in Deno edge functions**: Three.js can be imported via `npm:three` in Deno. The `GLTFLoader` requires a minimal DOM shim (just `document` and `TextDecoder`) which can be polyfilled. The `USDZExporter` operates purely on the scene graph -- no WebGL context needed.
-
-**Caching**: Once a USDZ is generated for a model, it is stored permanently in the `exports` bucket. Subsequent export requests for the same model return the cached file instantly. If a model is re-uploaded (new `storage_path`), the old USDZ remains valid until manually cleared.
-
-**File sizes**: USDZ files are typically slightly larger than GLB due to the ZIP container format with uncompressed assets. A 10MB GLB may produce a 12-15MB USDZ.
 
 ### Files to Create / Change
 
-| File | Action |
-|---|---|
-| SQL migration | Create `exports` bucket + RLS policies |
-| `supabase/functions/export-usdz/index.ts` | New edge function for GLB-to-USDZ conversion |
-| `supabase/config.toml` | Add `[functions.export-usdz]` config (auto-managed) |
-| `src/pages/Index.tsx` | Add EXPORT button to bottom dock + handler logic |
+| File | Action | Purpose |
+|---|---|---|
+| `src/pages/Index.tsx` | Modify | Fix AR Quick Look anchor (add valid img src); minor export handler tweaks |
+| `vite.config.ts` | Modify | Add vite-plugin-pwa configuration with manifest and workbox caching |
+| `index.html` | Modify | Add PWA meta tags (theme-color, apple-touch-icon, apple-mobile-web-app) |
+| `public/pwa-192x192.png` | Create | PWA icon (192x192) |
+| `public/pwa-512x512.png` | Create | PWA icon (512x512) |
+| `package.json` | Modify | Add vite-plugin-pwa dependency |
+
+### How Offline AR Works
+
+Once the PWA is installed and a model has been viewed at least once:
+
+1. The service worker caches the GLB file from the storage URL
+2. When offline, the app loads from cache
+3. The model renders in the 3D viewer from the cached GLB
+4. On iOS, tapping "QUICK LOOK" points the AR anchor at the same cached URL -- Safari's AR Quick Look can still open it from the service worker cache
+5. Annotations stored in the database won't sync while offline, but previously loaded annotations remain in the React Query cache for the session
 
