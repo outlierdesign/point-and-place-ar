@@ -1,5 +1,5 @@
-import { useRef, useCallback, useMemo } from "react";
-import { Canvas, useThree, ThreeEvent } from "@react-three/fiber";
+import { useRef, useCallback, useMemo, useEffect } from "react";
+import { Canvas, useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 import {
   OrbitControls,
   Environment,
@@ -99,6 +99,51 @@ function CursorSetter({ isPlacingMode }: { isPlacingMode: boolean }) {
   return null;
 }
 
+function KeyboardControls({ enabled }: { enabled: boolean }) {
+  const { camera } = useThree();
+  const keys = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const onDown = (e: KeyboardEvent) => {
+      if (["w","a","s","d","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) {
+        keys.current.add(e.key);
+      }
+    };
+    const onUp = (e: KeyboardEvent) => keys.current.delete(e.key);
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, []);
+
+  useFrame((_, delta) => {
+    if (!enabled || keys.current.size === 0) return;
+    const speed = 3 * delta;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+
+    if (keys.current.has("w") || keys.current.has("ArrowUp")) {
+      camera.position.addScaledVector(forward, speed);
+    }
+    if (keys.current.has("s") || keys.current.has("ArrowDown")) {
+      camera.position.addScaledVector(forward, -speed);
+    }
+    if (keys.current.has("a") || keys.current.has("ArrowLeft")) {
+      camera.position.addScaledVector(right, -speed);
+    }
+    if (keys.current.has("d") || keys.current.has("ArrowRight")) {
+      camera.position.addScaledVector(right, speed);
+    }
+  });
+
+  return null;
+}
+
 interface ModelViewerProps {
   modelUrl: string;
   modelKey: string;
@@ -129,6 +174,7 @@ export default function ModelViewer({
     >
       <SceneBackground />
       <CursorSetter isPlacingMode={isPlacingMode} />
+      <KeyboardControls enabled={!isPlacingMode} />
 
       <Bounds fit clip observe margin={1.5}>
         <SceneModel
