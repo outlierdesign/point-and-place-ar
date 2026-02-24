@@ -15,13 +15,21 @@ function SceneModel({
   url,
   isPlacingMode,
   onPlace,
+  annotations,
+  selectedId,
+  onSelectAnnotation,
+  onDeleteAnnotation,
 }: {
   url: string;
   isPlacingMode: boolean;
   onPlace: (pos: [number, number, number]) => void;
+  annotations: Annotation[];
+  selectedId: string | null;
+  onSelectAnnotation: (id: string) => void;
+  onDeleteAnnotation: (id: string) => void;
 }) {
   const { scene } = useGLTF(url);
-  const ref = useRef<THREE.Group>(null);
+  const groupRef = useRef<THREE.Group>(null);
 
   // Compute a uniform scale so the model fits within ~4 world units
   const { normalizedScale, yOffset } = useMemo(() => {
@@ -39,21 +47,32 @@ function SceneModel({
     (e: ThreeEvent<MouseEvent>) => {
       if (!isPlacingMode) return;
       e.stopPropagation();
-      const p = e.point;
+      // Convert world-space click to the model group's local space
+      if (!groupRef.current) return;
+      const localPoint = groupRef.current.worldToLocal(e.point.clone());
       onPlace([
-        parseFloat(p.x.toFixed(3)),
-        parseFloat(p.y.toFixed(3)),
-        parseFloat(p.z.toFixed(3)),
+        parseFloat(localPoint.x.toFixed(3)),
+        parseFloat(localPoint.y.toFixed(3)),
+        parseFloat(localPoint.z.toFixed(3)),
       ]);
     },
     [isPlacingMode, onPlace]
   );
 
   return (
-    <group scale={[normalizedScale, normalizedScale, normalizedScale]} position={[0, yOffset, 0]}>
-      <group ref={ref} onClick={handleClick}>
+    <group ref={groupRef} scale={[normalizedScale, normalizedScale, normalizedScale]} position={[0, yOffset, 0]}>
+      <group onClick={handleClick}>
         <primitive object={scene} />
       </group>
+      {annotations.map((ann) => (
+        <AnnotationPin
+          key={ann.id}
+          annotation={ann}
+          selected={selectedId === ann.id}
+          onSelect={onSelectAnnotation}
+          onDelete={onDeleteAnnotation}
+        />
+      ))}
     </group>
   );
 }
@@ -188,18 +207,12 @@ export default function ModelViewer({
           url={modelUrl}
           isPlacingMode={isPlacingMode}
           onPlace={onPlace}
+          annotations={annotations}
+          selectedId={selectedId}
+          onSelectAnnotation={onSelectAnnotation}
+          onDeleteAnnotation={onDeleteAnnotation}
         />
       </Bounds>
-
-      {annotations.map((ann) => (
-        <AnnotationPin
-          key={ann.id}
-          annotation={ann}
-          selected={selectedId === ann.id}
-          onSelect={onSelectAnnotation}
-          onDelete={onDeleteAnnotation}
-        />
-      ))}
 
       <OrbitControls
         makeDefault
