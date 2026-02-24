@@ -24,14 +24,14 @@ function SceneModel({
   const ref = useRef<THREE.Group>(null);
 
   // Compute a uniform scale so the model fits within ~4 world units
-  const normalizedScale = useMemo(() => {
+  const { normalizedScale, yOffset } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene);
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
-    if (maxDim === 0) return 1;
-    const targetSize = 4;
-    return targetSize / maxDim;
+    const scale = maxDim === 0 ? 1 : 4 / maxDim;
+    const yOff = -box.min.y * scale;
+    return { normalizedScale: scale, yOffset: yOff };
   }, [scene]);
 
   const handleClick = useCallback(
@@ -49,7 +49,7 @@ function SceneModel({
   );
 
   return (
-    <group scale={[normalizedScale, normalizedScale, normalizedScale]}>
+    <group scale={[normalizedScale, normalizedScale, normalizedScale]} position={[0, yOffset, 0]}>
       <group ref={ref} onClick={handleClick}>
         <primitive object={scene} />
       </group>

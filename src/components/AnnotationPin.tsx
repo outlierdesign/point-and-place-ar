@@ -41,7 +41,7 @@ export default function AnnotationPin({
   const goldBright = "#A7782B";
   const goldDim = "#7a5720";
 
-  const linePoints: [number, number, number][] = [[0, 0, 0], [0, -0.1, 0]];
+  const linePoints: [number, number, number][] = [[0, 0, 0], [0, -0.2, 0]];
 
   const handlePinClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
@@ -50,7 +50,7 @@ export default function AnnotationPin({
   };
 
   return (
-    <group position={[annotation.position[0], annotation.position[1] + 0.08, annotation.position[2]]}>
+    <group position={[annotation.position[0], annotation.position[1] + 0.18, annotation.position[2]]}>
       {/* Sphere pin */}
       <mesh
         ref={meshRef}
@@ -79,7 +79,7 @@ export default function AnnotationPin({
         />
       </mesh>
 
-      {/* Vertical line down to surface */}
+      {/* Vertical pole down to surface */}
       <Line
         points={linePoints}
         color={goldDim}
@@ -87,6 +87,12 @@ export default function AnnotationPin({
         transparent
         opacity={0.5}
       />
+
+      {/* Marker point (inverted cone at pole base) */}
+      <mesh position={[0, -0.2, 0]} rotation={[Math.PI, 0, 0]}>
+        <coneGeometry args={[0.015, 0.04, 8]} />
+        <meshStandardMaterial color={goldDim} metalness={0.7} roughness={0.3} />
+      </mesh>
 
       {/* Collapsed badge — always visible, compact */}
       <Html
