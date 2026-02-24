@@ -30,7 +30,8 @@ function SceneModel({
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
     const scale = maxDim === 0 ? 1 : 4 / maxDim;
-    const yOff = -box.min.y * scale;
+    // Place model bottom on the grid plane (y = -1.2)
+    const yOff = -box.min.y * scale - 1.2;
     return { normalizedScale: scale, yOffset: yOff };
   }, [scene]);
 
