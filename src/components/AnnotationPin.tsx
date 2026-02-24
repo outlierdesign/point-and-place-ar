@@ -41,7 +41,7 @@ export default function AnnotationPin({
   const goldBright = "#A7782B";
   const goldDim = "#7a5720";
 
-  const linePoints: [number, number, number][] = [[0, 0, 0], [0, -0.2, 0]];
+  const linePoints: [number, number, number][] = [[0, 0, 0], [0, -0.1, 0]];
 
   const handlePinClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
@@ -50,7 +50,7 @@ export default function AnnotationPin({
   };
 
   return (
-    <group position={[annotation.position[0], annotation.position[1] + 0.18, annotation.position[2]]}>
+    <group position={[annotation.position[0], annotation.position[1] + 0.1, annotation.position[2]]}>
       {/* Sphere pin */}
       <mesh
         ref={meshRef}
@@ -89,8 +89,8 @@ export default function AnnotationPin({
       />
 
       {/* Marker point (inverted cone at pole base) */}
-      <mesh position={[0, -0.2, 0]} rotation={[Math.PI, 0, 0]}>
-        <coneGeometry args={[0.015, 0.04, 8]} />
+      <mesh position={[0, -0.1, 0]} rotation={[Math.PI, 0, 0]}>
+        <coneGeometry args={[0.012, 0.03, 8]} />
         <meshStandardMaterial color={goldDim} metalness={0.7} roughness={0.3} />
       </mesh>
 
