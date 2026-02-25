@@ -12,6 +12,7 @@ interface AnnotationPanelProps {
   onTogglePlacingMode: () => void;
   onClearAll: () => void;
   onClose?: () => void;
+  isReadOnly?: boolean;
 }
 
 export default function AnnotationPanel({
@@ -24,6 +25,7 @@ export default function AnnotationPanel({
   onTogglePlacingMode,
   onClearAll,
   onClose,
+  isReadOnly = false,
 }: AnnotationPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -81,21 +83,23 @@ export default function AnnotationPanel({
       {/* Collapsible body */}
       {!collapsed && (
         <>
-          {/* Add button */}
-          <div className="px-3 py-2" style={{ borderBottom: "1px solid hsl(var(--glass-border))" }}>
-            <button
-              onClick={(e) => { e.stopPropagation(); onTogglePlacingMode(); }}
-              className={`w-full py-2 px-3 flex items-center gap-2 transition-all duration-200 ${
-                isPlacingMode ? "btn-cyan" : "btn-ghost-cyan"
-              }`}
-            >
-              <Plus size={12} />
-              <span>{isPlacingMode ? "Click model to place..." : "Add Annotation"}</span>
-              {isPlacingMode && (
-                <span className="ml-auto" style={{ fontSize: 9, opacity: 0.7 }}>ESC to cancel</span>
-              )}
-            </button>
-          </div>
+          {/* Add button — hidden for read-only users */}
+          {!isReadOnly && (
+            <div className="px-3 py-2" style={{ borderBottom: "1px solid hsl(var(--glass-border))" }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onTogglePlacingMode(); }}
+                className={`w-full py-2 px-3 flex items-center gap-2 transition-all duration-200 ${
+                  isPlacingMode ? "btn-cyan" : "btn-ghost-cyan"
+                }`}
+              >
+                <Plus size={12} />
+                <span>{isPlacingMode ? "Click model to place..." : "Add Annotation"}</span>
+                {isPlacingMode && (
+                  <span className="ml-auto" style={{ fontSize: 9, opacity: 0.7 }}>ESC to cancel</span>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Annotation list */}
           <div className="flex-1 overflow-y-auto py-2" style={{ maxHeight: "calc(100vh - 220px)" }}>
@@ -211,25 +215,27 @@ export default function AnnotationPanel({
                           {ann.position.map((v) => v.toFixed(2)).join(", ")}
                         </div>
                       </div>
-                      {/* Action buttons — always visible for selected, hover for others */}
-                      <div className={`flex gap-1 ml-1 flex-shrink-0 ${selectedId === ann.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity`}>
-                        <button
-                          className="p-1 transition-colors hover:bg-white/5"
-                          style={{ color: "hsl(var(--gold))" }}
-                          onClick={(e) => { e.stopPropagation(); startEdit(ann); }}
-                          title="Edit"
-                        >
-                          <Pencil size={11} />
-                        </button>
-                        <button
-                          className="p-1 transition-colors hover:bg-red-500/10"
-                          style={{ color: "hsl(var(--destructive))" }}
-                          onClick={(e) => { e.stopPropagation(); onDelete(ann.id); }}
-                          title="Delete"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                      {/* Action buttons — hidden for read-only users */}
+                      {!isReadOnly && (
+                        <div className={`flex gap-1 ml-1 flex-shrink-0 ${selectedId === ann.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity`}>
+                          <button
+                            className="p-1 transition-colors hover:bg-white/5"
+                            style={{ color: "hsl(var(--gold))" }}
+                            onClick={(e) => { e.stopPropagation(); startEdit(ann); }}
+                            title="Edit"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            className="p-1 transition-colors hover:bg-red-500/10"
+                            style={{ color: "hsl(var(--destructive))" }}
+                            onClick={(e) => { e.stopPropagation(); onDelete(ann.id); }}
+                            title="Delete"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -237,8 +243,8 @@ export default function AnnotationPanel({
             )}
           </div>
 
-          {/* Footer */}
-          {annotations.length > 0 && (
+          {/* Footer — hidden for read-only users */}
+          {!isReadOnly && annotations.length > 0 && (
             <div className="px-4 py-3" style={{ borderTop: "1px solid hsl(var(--glass-border))" }}>
               <button
                 className="btn-ghost-cyan w-full py-1.5 text-xs flex items-center justify-center gap-2"

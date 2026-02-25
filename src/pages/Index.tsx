@@ -22,6 +22,8 @@ export default function Index() {
   const [pendingPos, setPendingPos] = useState<[number, number, number] | null>(null);
   const [newLabel, setNewLabel] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [newMediaUrl, setNewMediaUrl] = useState("");
+  const [newVideoUrl, setNewVideoUrl] = useState("");
   const [arSupported, setArSupported] = useState<boolean | null>(null);
 
   // Drawer state (shared between mobile + desktop)
@@ -173,11 +175,13 @@ export default function Index() {
     setIsPlacingMode(false);
     setNewLabel("");
     setNewDesc("");
+    setNewMediaUrl("");
+    setNewVideoUrl("");
   }, []);
 
   const confirmAnnotation = async () => {
     if (!pendingPos) return;
-    const ann = await addAnnotation(pendingPos, newLabel, newDesc);
+    const ann = await addAnnotation(pendingPos, newLabel, newDesc, newMediaUrl || undefined, newVideoUrl || undefined);
     if (ann) setSelectedId(ann.id);
     setPendingPos(null);
   };
@@ -406,6 +410,7 @@ export default function Index() {
           onTogglePlacingMode={() => setIsPlacingMode((v) => !v)}
           onClearAll={clearAll}
           onClose={() => setAnnotationsOpen(false)}
+          isReadOnly={!user}
         />
       </div>
 
@@ -569,6 +574,24 @@ export default function Index() {
               placeholder="Description (optional)"
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
+              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
+              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
+            />
+            <input
+              className="w-full bg-transparent border px-3 py-2 font-mono text-xs outline-none"
+              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 11 }}
+              placeholder="Photo URL (optional, https://...)"
+              value={newMediaUrl}
+              onChange={(e) => setNewMediaUrl(e.target.value)}
+              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
+              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
+            />
+            <input
+              className="w-full bg-transparent border px-3 py-2 font-mono text-xs outline-none"
+              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 11 }}
+              placeholder="Video URL (optional, YouTube/Vimeo)"
+              value={newVideoUrl}
+              onChange={(e) => setNewVideoUrl(e.target.value)}
               onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
               onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
             />

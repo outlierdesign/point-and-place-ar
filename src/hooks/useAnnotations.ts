@@ -48,7 +48,9 @@ export function useAnnotations(modelId: string | null) {
   const addAnnotation = useCallback(async (
     position: [number, number, number],
     label: string,
-    description: string
+    description: string,
+    media_url?: string,
+    video_url?: string,
   ): Promise<Annotation | null> => {
     if (!modelId) return null;
 
@@ -62,6 +64,8 @@ export function useAnnotations(modelId: string | null) {
         position_x: position[0],
         position_y: position[1],
         position_z: position[2],
+        media_url: media_url || null,
+        video_url: video_url || null,
       })
       .select("id, label, description, position_x, position_y, position_z, media_url, video_url")
       .single();

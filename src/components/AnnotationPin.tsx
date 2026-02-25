@@ -121,10 +121,10 @@ export default function AnnotationPin({
           <span style={{
             color: "#C9954E",
             fontWeight: 600,
-            fontSize: 8,
+            fontSize: "clamp(8px, 1vw, 12px)",
             fontFamily: "'Red Hat Display', sans-serif",
             letterSpacing: "0.03em",
-            maxWidth: 100,
+            maxWidth: "clamp(100px, 12vw, 160px)",
             overflow: "hidden",
             textOverflow: "ellipsis",
           }}>
@@ -156,8 +156,8 @@ export default function AnnotationPin({
               border: "1px solid #A7782B60",
               borderRadius: 4,
               padding: "7px 8px",
-              maxWidth: 180,
-              minWidth: 130,
+              maxWidth: "clamp(160px, 20vw, 260px)",
+              minWidth: "clamp(120px, 14vw, 180px)",
               backdropFilter: "blur(6px)",
               boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
               userSelect: "none",
@@ -168,7 +168,7 @@ export default function AnnotationPin({
               <div style={{
                 color: "#C9954E",
                 fontWeight: 600,
-                fontSize: 10,
+                fontSize: "clamp(10px, 1.2vw, 14px)",
                 fontFamily: "'Red Hat Display', sans-serif",
                 wordBreak: "break-word",
                 whiteSpace: "normal",
@@ -195,7 +195,7 @@ export default function AnnotationPin({
             {annotation.description && (
               <div style={{
                 color: "hsl(42 30% 60%)",
-                fontSize: 9,
+                fontSize: "clamp(9px, 1vw, 13px)",
                 wordBreak: "break-word",
                 whiteSpace: "normal",
                 lineHeight: 1.4,
@@ -236,7 +236,7 @@ export default function AnnotationPin({
                   border: "1px solid #A7782B60",
                   color: "#C9954E",
                   fontFamily: "'Red Hat Display', sans-serif",
-                  fontSize: 8,
+                  fontSize: "clamp(8px, 0.9vw, 12px)",
                   padding: "3px 7px",
                   cursor: "pointer",
                   letterSpacing: "0.08em",
