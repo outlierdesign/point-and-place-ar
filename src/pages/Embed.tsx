@@ -9,12 +9,15 @@ import { Info, X, Layers } from "lucide-react";
 function rowToAnnotation(row: {
   id: string; label: string; description: string | null;
   position_x: number; position_y: number; position_z: number;
+  media_url?: string | null; video_url?: string | null;
 }): Annotation {
   return {
     id: row.id,
     label: row.label,
     description: row.description ?? "",
     position: [row.position_x, row.position_y, row.position_z],
+    media_url: row.media_url ?? undefined,
+    video_url: row.video_url ?? undefined,
   };
 }
 
@@ -50,7 +53,7 @@ export default function Embed() {
 
       const { data: anns } = await supabase
         .from("annotations")
-        .select("id, label, description, position_x, position_y, position_z")
+        .select("id, label, description, position_x, position_y, position_z, media_url, video_url")
         .eq("model_id", modelId)
         .order("created_at", { ascending: true });
       setAnnotations((anns ?? []).map(rowToAnnotation));
@@ -136,12 +139,7 @@ export default function Embed() {
           </span>
         </div>
 
-        <button
-          className={`glass-panel px-3 py-1.5 flex items-center gap-1.5 font-mono text-xs transition-all duration-200 ${isPlacingMode ? "btn-cyan" : "btn-ghost-cyan"}`}
-          onClick={() => setIsPlacingMode((v) => !v)}
-        >
-          <span>{isPlacingMode ? "Click to place pin..." : "Add Pin"}</span>
-        </button>
+        {/* Embed is view-only — no add pin button */}
       </div>
 
       {/* Controls */}
