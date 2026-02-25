@@ -17,6 +17,7 @@ interface AnnotationPinProps {
   selected: boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  pinScale?: number;
 }
 
 const getVideoEmbed = (url: string) => {
@@ -31,6 +32,7 @@ export default function AnnotationPin({
   annotation,
   selected,
   onSelect,
+  pinScale = 1,
 }: AnnotationPinProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
@@ -41,7 +43,8 @@ export default function AnnotationPin({
   const goldBright = "#A7782B";
   const goldDim = "#7a5720";
 
-  const linePoints: [number, number, number][] = [[0, 0, 0], [0, -0.1, 0]];
+  const s = pinScale;
+  const linePoints: [number, number, number][] = [[0, 0, 0], [0, -0.1 * s, 0]];
 
   const handlePinClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
@@ -50,7 +53,7 @@ export default function AnnotationPin({
   };
 
   return (
-    <group position={[annotation.position[0], annotation.position[1] + 0.1, annotation.position[2]]}>
+    <group position={[annotation.position[0], annotation.position[1] + 0.1 * s, annotation.position[2]]}>
       {/* Sphere pin */}
       <mesh
         ref={meshRef}
@@ -58,7 +61,7 @@ export default function AnnotationPin({
         onPointerOut={() => setHovered(false)}
         onClick={handlePinClick}
       >
-        <sphereGeometry args={[0.025, 16, 16]} />
+        <sphereGeometry args={[0.025 * s, 16, 16]} />
         <meshStandardMaterial
           color={selected ? goldBright : hovered ? goldBright : goldDim}
           emissive={selected ? goldBright : hovered ? goldDim : "#3d2b0d"}
@@ -70,7 +73,7 @@ export default function AnnotationPin({
 
       {/* Outer ring */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.035, 0.045, 32]} />
+        <ringGeometry args={[0.035 * s, 0.045 * s, 32]} />
         <meshBasicMaterial
           color={selected ? goldBright : goldDim}
           transparent
@@ -89,8 +92,8 @@ export default function AnnotationPin({
       />
 
       {/* Marker point (inverted cone at pole base) */}
-      <mesh position={[0, -0.1, 0]} rotation={[Math.PI, 0, 0]}>
-        <coneGeometry args={[0.012, 0.03, 8]} />
+      <mesh position={[0, -0.1 * s, 0]} rotation={[Math.PI, 0, 0]}>
+        <coneGeometry args={[0.012 * s, 0.03 * s, 8]} />
         <meshStandardMaterial color={goldDim} metalness={0.7} roughness={0.3} />
       </mesh>
 

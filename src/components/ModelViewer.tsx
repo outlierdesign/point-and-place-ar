@@ -32,7 +32,7 @@ function SceneModel({
   const groupRef = useRef<THREE.Group>(null);
 
   // Compute a uniform scale so the model fits within ~4 world units
-  const { normalizedScale, yOffset } = useMemo(() => {
+  const { normalizedScale, yOffset, pinScale } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene);
     const size = new THREE.Vector3();
     box.getSize(size);
@@ -40,7 +40,10 @@ function SceneModel({
     const scale = maxDim === 0 ? 1 : 4 / maxDim;
     // Place model bottom on the grid plane (y = -1.2)
     const yOff = -box.min.y * scale - 1.2;
-    return { normalizedScale: scale, yOffset: yOff };
+    // Pin geometry was designed for a ~4-unit model; scale pins so they remain
+    // visually consistent regardless of the model's original dimensions.
+    const pScale = maxDim === 0 ? 1 : maxDim / 4;
+    return { normalizedScale: scale, yOffset: yOff, pinScale: pScale };
   }, [scene]);
 
   const handleClick = useCallback(
@@ -71,6 +74,7 @@ function SceneModel({
           selected={selectedId === ann.id}
           onSelect={onSelectAnnotation}
           onDelete={onDeleteAnnotation}
+          pinScale={pinScale}
         />
       ))}
     </group>
