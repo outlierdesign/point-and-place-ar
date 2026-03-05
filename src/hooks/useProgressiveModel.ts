@@ -96,7 +96,7 @@ export function useProgressiveModel({ url }: UseProgressiveModelOptions) {
       setBlobUrl(null);
 
       try {
-        const response = await fetch(url!, { signal: controller.signal });
+        const response = await fetch(url!, { signal: controller.signal, cache: 'no-store' });
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
