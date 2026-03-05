@@ -10,12 +10,13 @@ import { useModels } from "@/hooks/useModels";
 import { useAnnotations } from "@/hooks/useAnnotations";
 import { ModelRecord } from "@/components/ModelLibrary";
 import { supabase } from "@/integrations/supabase/client";
-
+import ModelLoadingOverlay from "@/components/ModelLoadingOverlay";
+import { useProgressiveModel } from "@/hooks/useProgressiveModel";
 export default function Index() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const { models, loading: modelsLoading, refetch: refetchModels } = useModels();
-
+const { progress: modelProgress, isReady: modelReady } = useProgressiveModel({ url: modelUrl });
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPlacingMode, setIsPlacingMode] = useState(false);
