@@ -302,7 +302,7 @@ const { progress: modelProgress, isReady: modelReady } = useProgressiveModel({ u
             </div>
           }
         >
-          {modelUrl && (
+          {modelUrl && modelReady && (
             <ModelViewer
               modelUrl={modelUrl}
               modelKey={modelKey}
@@ -315,6 +315,7 @@ const { progress: modelProgress, isReady: modelReady } = useProgressiveModel({ u
             />
           )}
         </Suspense>
+        <ModelLoadingOverlay progress={modelProgress} />
       </div>
 
       {/* Drag overlay */}
