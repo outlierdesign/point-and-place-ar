@@ -32,7 +32,7 @@ export default function Index() {
 
   // Model display state
   const [modelUrl, setModelUrl] = useState<string | null>(null);
-const { progress: modelProgress, isReady: modelReady } = useProgressiveModel({ url: modelUrl });
+const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = useProgressiveModel({ url: modelUrl });
   const [modelKey, setModelKey] = useState("default");
   const [modelName, setModelName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -304,7 +304,7 @@ const { progress: modelProgress, isReady: modelReady } = useProgressiveModel({ u
         >
           {modelUrl && modelReady && (
             <ModelViewer
-              modelUrl={modelUrl}
+              modelUrl={modelBlobUrl || modelUrl}
               modelKey={modelKey}
               annotations={annotations}
               selectedId={selectedId}
