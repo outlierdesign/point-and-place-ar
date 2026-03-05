@@ -315,8 +315,10 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
             />
           )}
         </Suspense>
-        <ModelLoadingOverlay progress={modelProgress} />
       </div>
+
+      {/* Progress bar overlay — outside canvas z-0 container for proper stacking */}
+      <ModelLoadingOverlay progress={modelProgress} />
 
       {/* Drag overlay */}
       {isDragging && (
