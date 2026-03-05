@@ -22,7 +22,7 @@ export default function ModelLoadingOverlay({
   if (progress.phase !== "loading") return null;
 
   return (
-    <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+    <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
       <div
         className="glass-panel px-5 py-3"
         style={{ minWidth: 260 }}
