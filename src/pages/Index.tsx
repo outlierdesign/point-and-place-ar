@@ -16,7 +16,6 @@ export default function Index() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const { models, loading: modelsLoading, refetch: refetchModels } = useModels();
-const { progress: modelProgress, isReady: modelReady } = useProgressiveModel({ url: modelUrl });
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPlacingMode, setIsPlacingMode] = useState(false);
@@ -33,6 +32,7 @@ const { progress: modelProgress, isReady: modelReady } = useProgressiveModel({ u
 
   // Model display state
   const [modelUrl, setModelUrl] = useState<string | null>(null);
+const { progress: modelProgress, isReady: modelReady } = useProgressiveModel({ url: modelUrl });
   const [modelKey, setModelKey] = useState("default");
   const [modelName, setModelName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
