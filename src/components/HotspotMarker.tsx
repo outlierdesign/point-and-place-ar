@@ -29,7 +29,8 @@ export default function HotspotMarker({
     if (ringRef.current) {
       const pulse = (Math.sin(t * 1.5) + 1) / 2;
       ringRef.current.scale.setScalar(1.2 + pulse * 0.8);
-      (ringRef.current.material as THREE.MeshBasicMaterial).opacity = 0.6 - pulse * 0.5;
+      (ringRef.current.material as THREE.MeshBasicMaterial).opacity =
+        0.6 - pulse * 0.5;
     }
   });
 
@@ -38,7 +39,12 @@ export default function HotspotMarker({
       {/* Pulse ring */}
       <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.12, 0.18, 32]} />
-        <meshBasicMaterial color="#00d4ff" transparent opacity={0.4} side={THREE.DoubleSide} />
+        <meshBasicMaterial
+          color="#00d4ff"
+          transparent
+          opacity={0.4}
+          side={THREE.DoubleSide}
+        />
       </mesh>
 
       {/* Main sphere marker */}
@@ -74,18 +80,30 @@ export default function HotspotMarker({
         <meshStandardMaterial color="#00a8cc" metalness={0.5} roughness={0.3} />
       </mesh>
 
-      {/* HTML label overlay */}
+      {/* HTML label overlay — ALWAYS clickable */}
       <Html
         position={[0, 0.35, 0]}
         center
         distanceFactor={5}
         style={{
-          pointerEvents: hovered ? "auto" : "none",
+          pointerEvents: "auto",
           transition: "opacity 0.2s",
           opacity: 1,
         }}
       >
         <div
+          onClick={(e) => {
+            e.stopPropagation();
+            onExplore(modelId);
+          }}
+          onMouseEnter={() => {
+            setHovered(true);
+            document.body.style.cursor = "pointer";
+          }}
+          onMouseLeave={() => {
+            setHovered(false);
+            document.body.style.cursor = "auto";
+          }}
           style={{
             background: hovered
               ? "rgba(0, 24, 36, 0.95)"
@@ -100,6 +118,7 @@ export default function HotspotMarker({
             color: "#e0e0e0",
             whiteSpace: "nowrap",
             textAlign: "center",
+            cursor: "pointer",
             backdropFilter: "blur(8px)",
             boxShadow: hovered
               ? "0 0 20px rgba(255, 179, 71, 0.3)"
