@@ -8,12 +8,13 @@ export interface MapHotspot {
   description?: string;
 }
 
-/* Hotspot positions in the overview model's local coordinate space.
+/* Hotspot positions in the overview model's LOCAL (normalized) coordinate space.
+   The terrain is scaled so its largest dimension = 4 units.
    Use Shift+Click in the map view to log coordinates, then paste here. */
 const HOTSPOT_POSITIONS: Record<string, [number, number, number]> = {
-  "Peatland.glb":         [0.0, 0.5, -0.3],
-  "Composite Dams.glb":   [-0.6, 0.5, 0.4],
-  "Stone Dam.glb":        [0.5, 0.5, 0.5],
+  "Peatland.glb":         [-1.2, 1.2, -0.8],
+  "Composite Dams.glb":   [-0.8, 1.2,  1.2],
+  "Stone Dam.glb":        [ 1.2, 1.2,  0.6],
 };
 
 const OVERVIEW_MODEL_PREFIX = "Glashapullagh Jan 2025";
@@ -28,11 +29,11 @@ export function useMapHotspots() {
       .map((m) => {
         const pos =
           HOTSPOT_POSITIONS[m.name] ??
-          HOTSPOT_POSITIONS[m.name.replace(/\.glb$/i, "") + ".glb"] ??
-          [Math.random() * 3 - 1.5, 0.5, Math.random() * 3 - 1.5];
+          HOTSPOT_POSITIONS[m.name.replace(/\\.glb$/i, "") + ".glb"] ??
+          [Math.random() * 3 - 1.5, 1.2, Math.random() * 3 - 1.5];
         return {
           modelId: m.id,
-          label: m.name.replace(/\.glb$/i, ""),
+          label: m.name.replace(/\\.glb$/i, ""),
           position: pos as [number, number, number],
         };
       });
