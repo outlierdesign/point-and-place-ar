@@ -1,30 +1,48 @@
-import { useState, useCallback, useEffect, useRef, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2, Map } from "lucide-react";
+import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from "react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer from "@/components/ModelViewer";
-import MapOverview from "@/components/MapOverview";
 import AnnotationPanel from "@/components/AnnotationPanel";
 import ModelLibrary from "@/components/ModelLibrary";
 import { Annotation } from "@/components/AnnotationPin";
 import { useAuth } from "@/hooks/useAuth";
 import { useModels } from "@/hooks/useModels";
 import { useAnnotations } from "@/hooks/useAnnotations";
-import { useMapHotspots } from "@/hooks/useMapHotspots";
 import { ModelRecord } from "@/components/ModelLibrary";
 import { supabase } from "@/integrations/supabase/client";
 import ModelLoadingOverlay from "@/components/ModelLoadingOverlay";
 import { useProgressiveModel } from "@/hooks/useProgressiveModel";
 
+function buildLinkedAnnotations(
+  annotations: Annotation[],
+  models: ModelRecord[],
+  currentModelId: string | null
+): Annotation[] {
+  const nameToId = new Map<string, string>();
+  for (const m of models) {
+    if (m.id === currentModelId) continue;
+    const normalised = m.name.replace(/\.glb$/i, "").trim().toLowerCase();
+    nameToId.set(normalised, m.id);
+  }
+  return annotations.map((ann) => {
+    const normLabel = ann.label.trim().toLowerCase();
+    const matchedId = nameToId.get(normLabel);
+    if (matchedId) {
+      return { ...ann, linked_model_id: matchedId };
+    }
+    return ann;
+  });
+}
+
 export default function Index() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const { models, loading: modelsLoading, refetch: refetchModels } = useModels();
-  const { hotspots, overviewModel } = useMapHotspots();
 
-  // ── View mode: viewer (single model) or map (overview with hotspots) ──
-  const [viewMode, setViewMode] = useState<"viewer" | "map">("viewer");
-  const [cameFromMap, setCameFromMap] = useState(false);
-
+  const [parentModelId, setParentModelId] = useState<string | null>(null);
+  const [zoomTarget, setZoomTarget] = useState<{ position: [number, number, number] } | null>(null);
+  const [fadeOpacity, setFadeOpacity] = useState(0);
+  const [pendingChildModelId, setPendingChildModelId] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPlacingMode, setIsPlacingMode] = useState(false);
@@ -34,12 +52,8 @@ export default function Index() {
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [newVideoUrl, setNewVideoUrl] = useState("");
   const [arSupported, setArSupported] = useState<boolean | null>(null);
-
-  // Drawer state (shared between mobile + desktop)
   const [modelsOpen, setModelsOpen] = useState(false);
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
-
-  // Model display state
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = useProgressiveModel({ url: modelUrl });
   const [modelKey, setModelKey] = useState("default");
@@ -51,18 +65,6 @@ export default function Index() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
   const arQuickLookRef = useRef<HTMLAnchorElement>(null);
-
-  // ── Overview model progressive loading ──
-  const overviewUrl = overviewModel
-    ? supabase.storage.from("models").getPublicUrl(overviewModel.storage_path).data.publicUrl
-    : null;
-  const {
-    progress: overviewProgress,
-    isReady: overviewReady,
-    blobUrl: overviewBlobUrl,
-  } = useProgressiveModel({ url: viewMode === "map" ? overviewUrl : null });
-
-  // iOS detection
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const modelUrlIsPublic = !!modelUrl && modelUrl.startsWith("https://");
   const iosArAvailable = isIOS && modelUrlIsPublic;
@@ -74,11 +76,55 @@ export default function Index() {
 
   const { annotations, addAnnotation, updateAnnotation, deleteAnnotation, clearAll } = useAnnotations(selectedModelId);
 
-  // ── Map explore handler ──
-  const handleExplore = useCallback(
-    (modelId: string) => {
-      const model = models.find((m) => m.id === modelId);
-      if (!model) return;
+  const linkedModelIds = useMemo(() => {
+    const ids = new Set<string>();
+    models.forEach((m) => { if (m.id !== selectedModelId) ids.add(m.id); });
+    return ids;
+  }, [models, selectedModelId]);
+
+  const enrichedAnnotations = useMemo(
+    () => buildLinkedAnnotations(annotations, models, selectedModelId),
+    [annotations, models, selectedModelId]
+  );
+
+  const handleExploreLinked = useCallback(
+    (modelId: string, position: [number, number, number]) => {
+      setPendingChildModelId(modelId);
+      setZoomTarget({ position });
+      setTimeout(() => setFadeOpacity(1), 400);
+    },
+    []
+  );
+
+  const handleZoomComplete = useCallback(() => {
+    if (!pendingChildModelId) return;
+    const model = models.find((m) => m.id === pendingChildModelId);
+    if (!model) return;
+    if (!parentModelId) setParentModelId(selectedModelId);
+    const url = getPublicUrl(model.storage_path);
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setSelectedId(null);
+    setIsPlacingMode(false);
+    setPendingPos(null);
+    setSelectedModelId(model.id);
+    setModelUrl(url);
+    setModelKey(`db_${model.id}`);
+    setModelName(model.name);
+    setLoadError(null);
+    setZoomTarget(null);
+    setPendingChildModelId(null);
+    setTimeout(() => setFadeOpacity(0), 300);
+  }, [pendingChildModelId, models, getPublicUrl, parentModelId, selectedModelId]);
+
+  const handleBackToParent = useCallback(() => {
+    if (!parentModelId) return;
+    const model = models.find((m) => m.id === parentModelId);
+    if (!model) return;
+    setFadeOpacity(1);
+    setTimeout(() => {
       const url = getPublicUrl(model.storage_path);
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
@@ -92,21 +138,18 @@ export default function Index() {
       setModelKey(`db_${model.id}`);
       setModelName(model.name);
       setLoadError(null);
-      setViewMode("viewer");
-      setCameFromMap(true);
-    },
-    [models, getPublicUrl]
-  );
+      setParentModelId(null);
+      setTimeout(() => setFadeOpacity(0), 300);
+    }, 400);
+  }, [parentModelId, models, getPublicUrl]);
 
-  const handleBackToMap = useCallback(() => {
-    setViewMode("map");
-    setCameFromMap(false);
-  }, []);
-
-  // Auto-select first model when library loads
+  // Auto-select parent model on first load
   useEffect(() => {
     if (!modelsLoading && models.length > 0 && selectedModelId === null && modelUrl === null) {
-      const first = models[0];
+      const overview = models.find((m) =>
+        m.name.toLowerCase().startsWith("glashapullagh jan 2025")
+      );
+      const first = overview || models[0];
       const url = getPublicUrl(first.storage_path);
       setSelectedModelId(first.id);
       setModelUrl(url);
@@ -115,27 +158,31 @@ export default function Index() {
     }
   }, [modelsLoading, models, selectedModelId, modelUrl, getPublicUrl]);
 
+  // Check AR support
   useEffect(() => {
-    if (!isIOS) {
-      if (navigator.xr) {
-        navigator.xr.isSessionSupported("immersive-ar").then(setArSupported);
-      } else {
-        setArSupported(false);
-      }
+    if (navigator.xr) {
+      navigator.xr.isSessionSupported("immersive-ar").then((supported) => setArSupported(supported)).catch(() => setArSupported(false));
+    } else {
+      setArSupported(false);
     }
-  }, [isIOS]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsPlacingMode(false);
-        setPendingPos(null);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsPlacingMode(false);
+        setSelectedId(null);
+        setPendingPos(null);
+        setModelsOpen(false);
+        setAnnotationsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Cleanup object URLs
   useEffect(() => {
     return () => {
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
@@ -143,25 +190,26 @@ export default function Index() {
   }, []);
 
   const loadFile = useCallback((file: File) => {
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext !== "gltf" && ext !== "glb") {
-      setLoadError(`Unsupported file type ".${ext}". Please drop a .gltf or .glb file.`);
+    if (!file.name.toLowerCase().endsWith(".glb")) {
+      setLoadError("Only .glb files are supported");
       return;
     }
-    setLoadError(null);
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     const url = URL.createObjectURL(file);
     objectUrlRef.current = url;
-    setSelectedModelId(null);
-    setSelectedId(null);
     setModelUrl(url);
-    setModelKey(`custom_${Date.now()}`);
+    setModelKey(file.name + "_" + Date.now());
     setModelName(file.name);
-    setViewMode("viewer");
-    setCameFromMap(false);
+    setSelectedModelId(null);
+    setParentModelId(null);
+    setSelectedId(null);
+    setIsPlacingMode(false);
+    setPendingPos(null);
+    setLoadError(null);
   }, []);
 
-  const handleSelectModel = useCallback((model: ModelRecord, url: string) => {
+  const handleSelectModel = useCallback((model: ModelRecord) => {
+    const url = getPublicUrl(model.storage_path);
     if (objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current);
       objectUrlRef.current = null;
@@ -173,525 +221,387 @@ export default function Index() {
     setModelUrl(url);
     setModelKey(`db_${model.id}`);
     setModelName(model.name);
+    setParentModelId(null);
     setLoadError(null);
     setModelsOpen(false);
-    setViewMode("viewer");
-    setCameFromMap(false);
-  }, []);
+  }, [getPublicUrl]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    dragCounterRef.current += 1;
-    setIsDragging(true);
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    dragCounterRef.current -= 1;
+    e.stopPropagation();
+    dragCounterRef.current--;
     if (dragCounterRef.current === 0) setIsDragging(false);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
+    e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      dragCounterRef.current = 0;
-      setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file) loadFile(file);
-    },
-    [loadFile]
-  );
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+    const file = e.dataTransfer.files?.[0];
+    if (file) loadFile(file);
+  }, [loadFile]);
 
-  const handleFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) loadFile(file);
-      e.target.value = "";
-    },
-    [loadFile]
-  );
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) loadFile(file);
+    e.target.value = "";
+  }, [loadFile]);
 
   const handlePlace = useCallback((pos: [number, number, number]) => {
     setPendingPos(pos);
-    setIsPlacingMode(false);
+  }, []);
+
+  const confirmAnnotation = useCallback(async () => {
+    if (!pendingPos || !newLabel.trim()) return;
+    await addAnnotation(pendingPos, newLabel.trim(), newDesc.trim(), newMediaUrl.trim(), newVideoUrl.trim());
+    setPendingPos(null);
     setNewLabel("");
     setNewDesc("");
     setNewMediaUrl("");
     setNewVideoUrl("");
-  }, []);
+    setIsPlacingMode(false);
+  }, [pendingPos, newLabel, newDesc, newMediaUrl, newVideoUrl, addAnnotation]);
 
-  const confirmAnnotation = async () => {
-    if (!pendingPos) return;
-    const ann = await addAnnotation(pendingPos, newLabel, newDesc, newMediaUrl || undefined, newVideoUrl || undefined);
-    if (ann) setSelectedId(ann.id);
-    setPendingPos(null);
-  };
-
-  const handleAR = async () => {
-    if (isIOS) {
-      if (!iosArAvailable) {
-        if (isIOS && modelUrl && !modelUrlIsPublic) {
-          alert("AR Quick Look requires a model loaded from the library (public URL). Local files cannot be used with AR Quick Look.");
-        }
-        return;
-      }
-      const anchor = arQuickLookRef.current;
-      if (anchor) {
-        anchor.style.pointerEvents = "auto";
-        anchor.click();
-        anchor.style.pointerEvents = "none";
+  const handleAR = useCallback(() => {
+    if (iosArAvailable && modelUrl) {
+      if (arQuickLookRef.current) {
+        arQuickLookRef.current.setAttribute("href", modelUrl);
+        arQuickLookRef.current.click();
       }
       return;
     }
-    if (!arSupported) return;
-    try {
-      const session = await (navigator.xr as unknown as { requestSession: (type: string, opts: object) => Promise<{ end: () => void }> }).requestSession("immersive-ar", {
-        requiredFeatures: ["hit-test"],
-      });
-      session.end();
-      alert("AR session started! Full AR integration requires a mobile device with ARCore support.");
-    } catch {
-      alert("Could not start AR session. Please use a compatible mobile device with ARCore.");
-    }
-  };
+    if (!arSupported || !modelUrl) return;
+    navigator.xr?.requestSession("immersive-ar", {
+      requiredFeatures: ["hit-test", "local-floor"],
+      optionalFeatures: ["dom-overlay"],
+    }).catch(console.error);
+  }, [arSupported, modelUrl, iosArAvailable]);
 
-  const handleExportUSDZ = async () => {
-    if (!modelUrl || exporting) return;
+  const handleExportUSDZ = useCallback(async () => {
+    if (!modelUrl) return;
     setExporting(true);
     try {
-      if (isIOS && modelUrlIsPublic) {
-        const anchor = arQuickLookRef.current;
-        if (anchor) {
-          anchor.href = modelUrl + "#.usdz";
-          anchor.style.pointerEvents = "auto";
-          anchor.click();
-          anchor.style.pointerEvents = "none";
-        }
-      } else {
-        const a = document.createElement("a");
-        a.href = modelUrl;
-        a.download = `${modelName || "model"}.glb`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
+      const { USDZExporter } = await import("three/examples/jsm/exporters/USDZExporter.js");
+      const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+      const loader = new GLTFLoader();
+      const gltf = await new Promise<any>((resolve, reject) => {
+        loader.load(modelBlobUrl || modelUrl, resolve, undefined, reject);
+      });
+      const exporter = new USDZExporter();
+      const arraybuffer = await exporter.parse(gltf.scene);
+      const blob = new Blob([arraybuffer], { type: "model/vnd.usdz+zip" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = (modelName || "model").replace(/\.glb$/i, "") + ".usdz";
+      link.click();
+      URL.revokeObjectURL(link.href);
     } catch (err) {
-      alert("Export failed: " + String(err));
+      console.error("USDZ export failed:", err);
     } finally {
       setExporting(false);
     }
-  };
+  }, [modelUrl, modelBlobUrl, modelName]);
 
-  const embedUrl = selectedModelId ? `${window.location.origin}/embed/${selectedModelId}` : null;
-  const copyEmbedUrl = () => {
-    if (embedUrl) {
-      navigator.clipboard.writeText(
-        `<iframe src="${embedUrl}" width="800" height="600" frameborder="0" allowfullscreen></iframe>`
-      );
-      alert("Embed code copied to clipboard!");
-    }
-  };
+  const copyEmbedUrl = useCallback(() => {
+    if (!selectedModelId) return;
+    const url = `${window.location.origin}/embed/${selectedModelId}`;
+    navigator.clipboard.writeText(url).then(() => alert("Embed URL copied!"));
+  }, [selectedModelId]);
 
   if (authLoading) {
     return (
-      <div className="w-screen h-screen flex items-center justify-center" style={{ background: "hsl(var(--background))" }}>
-        <div className="w-6 h-6 border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--gold))", borderTopColor: "transparent" }} />
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <Loader2 className="animate-spin text-cyan-400" size={32} />
       </div>
     );
   }
 
   return (
     <div
-      className="w-screen h-screen flex overflow-hidden relative"
-      style={{ background: "hsl(var(--background))" }}
+      className="relative h-screen w-screen overflow-hidden bg-background"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <input ref={fileInputRef} type="file" accept=".gltf,.glb" className="hidden" onChange={handleFileInput} />
+      <input ref={fileInputRef} type="file" accept=".glb" className="hidden" onChange={handleFileInput} />
+      <a ref={arQuickLookRef} rel="ar" className="hidden"><img /></a>
 
-      {/* iOS AR Quick Look anchor */}
-      <a
-        ref={arQuickLookRef}
-        rel="ar"
-        href={modelUrlIsPublic ? modelUrl! + "#.usdz" : undefined}
-        style={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", opacity: 0, pointerEvents: "none", clip: "rect(0,0,0,0)" }}
-      >
-        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAABJRU5ErkJggg==" alt="" />
-      </a>
-
-      {/* 3D Canvas — full screen */}
-      <div className="absolute inset-0 z-0">
-        {viewMode === "map" ? (
-          /* ── MAP OVERVIEW MODE ── */
-          overviewReady && overviewBlobUrl ? (
-            <MapOverview
-              overviewUrl={overviewBlobUrl}
-              hotspots={hotspots}
-              onExplore={handleExplore}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--gold))", borderTopColor: "transparent" }} />
-                <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--gold))" }}>LOADING MAP...</div>
-              </div>
-            </div>
-          )
-        ) : (
-          /* ── SINGLE MODEL VIEWER MODE ── */
-          <Suspense
-            fallback={
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--gold))", borderTopColor: "transparent" }} />
-                  <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--gold))" }}>LOADING MODEL...</div>
-                </div>
-              </div>
-            }
-          >
-            {modelUrl && modelReady && (
-              <ModelViewer
-                modelUrl={modelBlobUrl || modelUrl}
-                modelKey={modelKey}
-                annotations={annotations}
-                selectedId={selectedId}
-                isPlacingMode={isPlacingMode}
-                onPlace={handlePlace}
-                onSelectAnnotation={setSelectedId}
-                onDeleteAnnotation={deleteAnnotation}
-              />
-            )}
-          </Suspense>
-        )}
-      </div>
-
-      {/* Progress overlay */}
-      {viewMode === "map" ? (
-        <ModelLoadingOverlay progress={overviewProgress} />
-      ) : (
-        <ModelLoadingOverlay progress={modelProgress} />
-      )}
-
-      {/* Drag overlay */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center fade-in pointer-events-none" style={{ background: "hsl(var(--muted) / 0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="flex flex-col items-center gap-4 p-12" style={{ border: "2px dashed hsl(var(--gold))", boxShadow: "0 0 40px hsl(var(--gold) / 0.2)" }}>
-            <FolderOpen size={40} style={{ color: "hsl(var(--gold))", filter: "drop-shadow(0 0 12px hsl(36 58% 41% / 0.6))" }} />
-            <div className="font-mono font-bold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>Drop Model Here</div>
-            <div className="font-mono text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>Supports .gltf and .glb files</div>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-cyan-500/50 rounded-lg m-4">
+          <div className="text-center">
+            <FolderOpen className="mx-auto mb-2 text-cyan-400" size={48} />
+            <p className="text-cyan-300 tracking-widest uppercase text-sm">Drop .glb file here</p>
           </div>
         </div>
       )}
 
-      {/* ── Top bar ── */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-3 md:px-5 py-3">
-        <div className="glass-panel flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2">
-          <Layers size={14} style={{ color: "hsl(var(--gold))" }} />
-          <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--foreground))" }}>
-            Acres Ireland
-          </span>
-          <div className="hidden md:block w-px h-3 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-          <span className="hidden md:block font-mono text-xs max-w-48 truncate" style={{ color: "hsl(var(--muted-foreground))" }}>
-            {viewMode === "map" ? "Overview Map" : modelName}
-          </span>
-        </div>
-
-        {/* Back to Map button — shown when came from map */}
-        {viewMode === "viewer" && cameFromMap && (
-          <button
-            className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2 fade-in"
-            onClick={handleBackToMap}
-          >
-            <Map size={12} />
-            <span className="tracking-widest uppercase text-xs">Back to Map</span>
-          </button>
-        )}
-
-        <div className="hidden md:flex items-center gap-2">
-          {user ? (
-            <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={signOut} title="Sign out">
-              <LogOut size={12} />
-              <span className="tracking-widest uppercase text-xs">Sign Out</span>
-            </button>
-          ) : (
-            <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={() => navigate("/auth")} title="Sign in">
-              <LogIn size={12} />
-              <span className="tracking-widest uppercase text-xs">Sign In</span>
-            </button>
-          )}
-        </div>
-
-        <div className="flex md:hidden items-center">
-          {user ? (
-            <button className="glass-panel p-2.5" style={{ color: "hsl(var(--muted-foreground))" }} onClick={signOut} title="Sign out">
-              <LogOut size={16} />
-            </button>
-          ) : (
-            <button className="glass-panel p-2.5" style={{ color: "hsl(var(--muted-foreground))" }} onClick={() => navigate("/auth")} title="Sign in">
-              <LogIn size={16} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Off-canvas backdrop ── */}
-      {(modelsOpen || annotationsOpen) && (
-        <div
-          className="fixed inset-0 z-30"
-          style={{ background: "hsl(var(--muted) / 0.5)", backdropFilter: "blur(2px)" }}
-          onClick={() => { setModelsOpen(false); setAnnotationsOpen(false); }}
-        />
+      {/* Loading overlay */}
+      {modelUrl && !modelReady && (
+        <ModelLoadingOverlay progress={modelProgress} modelName={modelName} />
       )}
 
-      {/* ── Models drawer ── */}
-      <div
-        className="fixed inset-y-0 left-0 z-40 w-72 md:w-80 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-24 px-3"
-        style={{ transform: modelsOpen ? "translateX(0)" : "translateX(-100%)" }}
-      >
-        <ModelLibrary
-          models={models}
-          selectedModelId={selectedModelId}
-          onSelectModel={handleSelectModel}
-          onRefresh={refetchModels}
-          onClose={() => setModelsOpen(false)}
-        />
-      </div>
-
-      {/* ── Annotations drawer ── */}
-      <div
-        className="fixed inset-y-0 right-0 z-40 w-72 md:w-80 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-24 px-3"
-        style={{ transform: annotationsOpen ? "translateX(0)" : "translateX(100%)" }}
-      >
-        <AnnotationPanel
-          annotations={annotations}
+      {/* 3D Canvas */}
+      {modelUrl && modelReady && (modelBlobUrl || modelUrl) ? (
+        <ModelViewer
+          modelUrl={modelBlobUrl || modelUrl}
+          modelKey={modelKey}
+          annotations={enrichedAnnotations}
           selectedId={selectedId}
-          onSelect={setSelectedId}
-          onDelete={deleteAnnotation}
-          onUpdate={(id, label, desc, media_url, video_url) => updateAnnotation(id, label, desc, media_url, video_url)}
           isPlacingMode={isPlacingMode}
-          onTogglePlacingMode={() => setIsPlacingMode((v) => !v)}
-          onClearAll={clearAll}
-          onClose={() => setAnnotationsOpen(false)}
-          isReadOnly={!user}
+          onPlace={handlePlace}
+          onSelectAnnotation={setSelectedId}
+          onDeleteAnnotation={deleteAnnotation}
+          onExploreLinked={handleExploreLinked}
+          linkedModelIds={linkedModelIds}
+          zoomTarget={zoomTarget}
+          onZoomComplete={handleZoomComplete}
         />
-      </div>
+      ) : !modelUrl ? (
+        <div className="h-full w-full flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <p className="text-muted-foreground tracking-widest uppercase text-sm">
+              {modelsLoading ? "Loading models..." : "No model loaded"}
+            </p>
+            {!modelsLoading && (
+              <button className="glass-panel px-4 py-2 text-cyan-400 hover:text-cyan-300 transition-colors tracking-widest uppercase text-xs" onClick={() => setModelsOpen(true)}>
+                Open Model Library
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
 
-      {/* ── Unified bottom dock ── */}
+      {/* Fade overlay for transitions */}
       <div
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 px-3 py-2 glass-panel"
-        style={{ borderColor: "hsl(var(--glass-border))" }}
-      >
-        {/* Models */}
-        <button
-          className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-          style={{ color: modelsOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
-          onClick={() => { setModelsOpen((v) => !v); setAnnotationsOpen(false); }}
-        >
-          <Layers size={18} />
-          <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>MODELS</span>
-        </button>
+        className="absolute inset-0 z-30 pointer-events-none"
+        style={{
+          background: "hsl(var(--background))",
+          opacity: fadeOpacity,
+          transition: "opacity 0.5s ease-in-out",
+        }}
+      />
 
-        <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-
-        {/* MAP — toggle overview */}
-        {overviewModel && (
-          <>
-            <button
-              className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-              style={{ color: viewMode === "map" ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
-              onClick={() => {
-                if (viewMode === "map") {
-                  setViewMode("viewer");
-                  setCameFromMap(false);
-                } else {
-                  setViewMode("map");
-                  setCameFromMap(false);
-                }
-              }}
-              title={viewMode === "map" ? "Return to model viewer" : "Open 3D overview map"}
-            >
-              <Map size={18} />
-              <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>MAP</span>
-            </button>
-            <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-          </>
-        )}
-
-        {/* Annotations */}
-        <button
-          className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-          style={{ color: annotationsOpen ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
-          onClick={() => { setAnnotationsOpen((v) => !v); setModelsOpen(false); }}
-        >
-          <MapPin size={18} />
-          <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>PINS</span>
-        </button>
-
-        <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-
-        {/* AR */}
-        <button
-          className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-          style={{
-            color: iosArAvailable || arSupported ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
-            opacity: iosArAvailable || arSupported ? 1 : 0.4,
-          }}
-          onClick={handleAR}
-          disabled={isIOS ? !iosArAvailable : !arSupported}
-          title={isIOS ? (iosArAvailable ? "Open in AR Quick Look (iOS 15+)" : "Load a library model first") : (arSupported ? "Enter AR mode" : "AR not supported on this device")}
-        >
-          <Crosshair size={18} />
-          <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>
-            {isIOS ? (iosArAvailable ? "QUICK LOOK" : "AR N/A") : (arSupported === null ? "AR..." : arSupported ? "AR" : "AR N/A")}
-          </span>
-        </button>
-
-        {/* Export */}
-        {selectedModelId && viewMode === "viewer" && (
-          <>
-            <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-            <button
-              className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-              style={{ color: exporting ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
-              onClick={handleExportUSDZ}
-              disabled={exporting}
-              title="Export model for download / AR Quick Look"
-            >
-              {exporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-              <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>
-                {exporting ? "EXPORTING" : "EXPORT"}
-              </span>
-            </button>
-          </>
-        )}
-
-        {/* Admin: Load Local */}
-        {isAdmin && (
-          <>
-            <div className="hidden md:block w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-            <button
-              className="hidden md:flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-              style={{ color: "hsl(var(--muted-foreground))" }}
-              onClick={() => fileInputRef.current?.click()}
-              title="Load a local GLTF or GLB file"
-            >
-              <FolderOpen size={18} />
-              <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>LOCAL</span>
-            </button>
-          </>
-        )}
-
-        {/* Embed */}
-        {embedUrl && viewMode === "viewer" && (
-          <>
-            <div className="hidden md:block w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
-            <button
-              className="hidden md:flex flex-col items-center gap-1 px-4 py-2 transition-colors"
-              style={{ color: "hsl(var(--muted-foreground))" }}
-              onClick={copyEmbedUrl}
-              title="Copy embed code"
-            >
-              <Maximize2 size={18} />
-              <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>EMBED</span>
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Bottom-left controls hint */}
-      <div className="hidden md:block absolute bottom-5 left-5 z-20 glass-panel px-3 py-2">
-        <div className="font-mono space-y-1" style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>
-          <div><span style={{ color: "hsl(var(--gold))" }}>Drag</span> — Orbit</div>
-          <div><span style={{ color: "hsl(var(--gold))" }}>Scroll</span> — Zoom</div>
-          <div><span style={{ color: "hsl(var(--gold))" }}>Right drag</span> — Pan</div>
-          {viewMode === "map" && (
-            <div style={{ borderTop: "1px solid hsl(var(--glass-border))", paddingTop: 4, marginTop: 2 }}>
-              <span style={{ color: "hsl(var(--gold))" }}>Shift+Click</span> — Log position
+      {/* Top bar */}
+      <div className="absolute top-0 left-0 right-0 z-20 p-4 flex items-start justify-between">
+        <div className="flex flex-col gap-2">
+          {modelName && (
+            <div className="glass-panel px-3 py-1.5 fade-in">
+              <h1 className="text-xs tracking-widest uppercase text-foreground/80">{modelName}</h1>
             </div>
           )}
-          {isAdmin && viewMode === "viewer" && (
-            <div style={{ borderTop: "1px solid hsl(var(--glass-border))", paddingTop: 4, marginTop: 2 }}>
-              <span style={{ color: "hsl(var(--gold))" }}>Drop</span> .gltf / .glb to load
-            </div>
+          {parentModelId && (
+            <button
+              className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2 fade-in"
+              onClick={handleBackToParent}
+            >
+              <ArrowLeft size={12} />
+              <span className="tracking-widest uppercase text-xs">Back to Overview</span>
+            </button>
           )}
-          {isPlacingMode && (
-            <div className="fade-in" style={{ color: "hsl(var(--gold))" }}>Click model to place pin</div>
+        </div>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <button className="glass-panel btn-ghost-cyan p-2" onClick={() => navigate("/admin")} title="Admin Panel">
+              <Info size={14} />
+            </button>
+          )}
+          {user ? (
+            <button className="glass-panel btn-ghost-cyan p-2" onClick={signOut} title="Sign Out">
+              <LogOut size={14} />
+            </button>
+          ) : (
+            <button className="glass-panel btn-ghost-cyan p-2" onClick={() => navigate("/auth")} title="Sign In">
+              <LogIn size={14} />
+            </button>
           )}
         </div>
       </div>
+
+      {/* Controls hint */}
+      {isPlacingMode && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 glass-panel px-4 py-2 fade-in">
+          <p className="text-xs tracking-widest uppercase text-cyan-400">
+            Click on the model to place a pin
+          </p>
+        </div>
+      )}
 
       {/* Load error */}
       {loadError && (
-        <div className="absolute bottom-24 md:bottom-5 left-1/2 -translate-x-1/2 z-40 glass-panel px-4 py-3 flex items-center gap-3 fade-in w-80" style={{ borderColor: "hsl(var(--destructive) / 0.5)" }}>
-          <X size={12} style={{ color: "hsl(var(--destructive))" }} />
-          <span className="font-mono text-xs flex-1" style={{ color: "hsl(var(--foreground))" }}>{loadError}</span>
-          <button onClick={() => setLoadError(null)} style={{ color: "hsl(var(--muted-foreground))" }}>
-            <X size={10} />
-          </button>
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 glass-panel px-4 py-2 border-red-500/30">
+          <p className="text-xs tracking-widest uppercase text-red-400">{loadError}</p>
         </div>
       )}
 
-      {/* Pending annotation modal */}
+      {/* Bottom dock */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 p-4">
+        <div className="flex justify-center">
+          <div className="glass-panel px-2 py-2 flex gap-1 items-center">
+            {/* MODELS */}
+            <button
+              className={`btn-ghost-cyan px-3 py-2 flex flex-col items-center gap-1 ${modelsOpen ? "text-cyan-400" : ""}`}
+              onClick={() => { setModelsOpen(!modelsOpen); setAnnotationsOpen(false); }}
+              title="Model Library"
+            >
+              <Layers size={16} />
+              <span className="text-[10px] tracking-widest uppercase">Models</span>
+            </button>
+
+            {/* PINS */}
+            {modelUrl && (
+              <button
+                className={`btn-ghost-cyan px-3 py-2 flex flex-col items-center gap-1 ${annotationsOpen ? "text-cyan-400" : ""}`}
+                onClick={() => { setAnnotationsOpen(!annotationsOpen); setModelsOpen(false); }}
+                title="Annotations"
+              >
+                <MapPin size={16} />
+                <span className="text-[10px] tracking-widest uppercase">Pins</span>
+              </button>
+            )}
+
+            {/* PLACE PIN */}
+            {modelUrl && user && (
+              <button
+                className={`btn-ghost-cyan px-3 py-2 flex flex-col items-center gap-1 ${isPlacingMode ? "text-cyan-400 bg-cyan-400/10" : ""}`}
+                onClick={() => setIsPlacingMode(!isPlacingMode)}
+                title={isPlacingMode ? "Cancel Placing" : "Place Pin"}
+              >
+                <Crosshair size={16} />
+                <span className="text-[10px] tracking-widest uppercase">{isPlacingMode ? "Cancel" : "Place"}</span>
+              </button>
+            )}
+
+            {/* AR */}
+            {modelUrl && (arSupported || iosArAvailable) && (
+              <button className="btn-ghost-cyan px-3 py-2 flex flex-col items-center gap-1" onClick={handleAR} title="View in AR">
+                <Maximize2 size={16} />
+                <span className="text-[10px] tracking-widest uppercase">AR</span>
+              </button>
+            )}
+
+            {/* EXPORT USDZ */}
+            {modelUrl && (
+              <button className="btn-ghost-cyan px-3 py-2 flex flex-col items-center gap-1" onClick={handleExportUSDZ} disabled={exporting} title="Export USDZ">
+                {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                <span className="text-[10px] tracking-widest uppercase">Export</span>
+              </button>
+            )}
+
+            {/* LOCAL FILE */}
+            <button className="btn-ghost-cyan px-3 py-2 flex flex-col items-center gap-1" onClick={() => fileInputRef.current?.click()} title="Load local file">
+              <FolderOpen size={16} />
+              <span className="text-[10px] tracking-widest uppercase">Local</span>
+            </button>
+
+            {/* EMBED */}
+            {selectedModelId && (
+              <button className="btn-ghost-cyan px-3 py-2 flex flex-col items-center gap-1" onClick={copyEmbedUrl} title="Copy embed URL">
+                <Info size={16} />
+                <span className="text-[10px] tracking-widest uppercase">Embed</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Model Library Panel */}
+      {modelsOpen && (
+        <div className="absolute top-0 left-0 bottom-0 z-20 w-80 max-w-[85vw]">
+          <ModelLibrary
+            models={models}
+            loading={modelsLoading}
+            selectedModelId={selectedModelId}
+            onSelectModel={handleSelectModel}
+            onClose={() => setModelsOpen(false)}
+            isAdmin={isAdmin}
+            onModelsChanged={refetchModels}
+          />
+        </div>
+      )}
+
+      {/* Annotation Panel */}
+      {annotationsOpen && (
+        <div className="absolute top-0 right-0 bottom-0 z-20 w-80 max-w-[85vw]">
+          <AnnotationPanel
+            annotations={enrichedAnnotations}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onDelete={deleteAnnotation}
+            onUpdate={updateAnnotation}
+            onClose={() => setAnnotationsOpen(false)}
+            isAdmin={isAdmin}
+          />
+        </div>
+      )}
+
+      {/* New annotation modal */}
       {pendingPos && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center px-4" style={{ background: "hsl(var(--muted) / 0.6)", backdropFilter: "blur(4px)" }}>
-          <div className="glass-panel p-6 w-full max-w-sm fade-in space-y-4">
-            <div className="flex items-center gap-2">
-              <Info size={14} style={{ color: "hsl(var(--gold))" }} />
-              <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--gold))" }}>
-                New Annotation
-              </span>
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="glass-panel p-6 w-96 max-w-[90vw] space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm tracking-widest uppercase text-foreground">New Pin</h2>
+              <button className="text-muted-foreground hover:text-foreground" onClick={() => { setPendingPos(null); setNewLabel(""); setNewDesc(""); setNewMediaUrl(""); setNewVideoUrl(""); }}>
+                <X size={16} />
+              </button>
             </div>
-            <div className="font-mono text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>
-              Position: {pendingPos.map((v) => v.toFixed(3)).join(", ")}
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Label *"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50"
+                autoFocus
+              />
+              <textarea
+                placeholder="Description (optional)"
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50 h-20 resize-none"
+              />
+              <input
+                type="url"
+                placeholder="Image URL (optional)"
+                value={newMediaUrl}
+                onChange={(e) => setNewMediaUrl(e.target.value)}
+                className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50"
+              />
+              <input
+                type="url"
+                placeholder="Video URL (optional)"
+                value={newVideoUrl}
+                onChange={(e) => setNewVideoUrl(e.target.value)}
+                className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50"
+              />
             </div>
-            <input
-              className="w-full bg-transparent border px-3 py-2 font-mono text-sm outline-none"
-              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--foreground))", fontSize: 13 }}
-              placeholder="Label (e.g. Visor, Damage Point)"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
-              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && confirmAnnotation()}
-            />
-            <textarea
-              className="w-full bg-transparent border px-3 py-2 font-mono text-xs outline-none resize-none"
-              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 11, height: 64 }}
-              placeholder="Description (optional)"
-              value={newDesc}
-              onChange={(e) => setNewDesc(e.target.value)}
-              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
-              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
-            />
-            <input
-              className="w-full bg-transparent border px-3 py-2 font-mono text-xs outline-none"
-              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 11 }}
-              placeholder="Photo URL (optional, https://...)"
-              value={newMediaUrl}
-              onChange={(e) => setNewMediaUrl(e.target.value)}
-              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
-              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
-            />
-            <input
-              className="w-full bg-transparent border px-3 py-2 font-mono text-xs outline-none"
-              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 11 }}
-              placeholder="Video URL (optional, YouTube/Vimeo)"
-              value={newVideoUrl}
-              onChange={(e) => setNewVideoUrl(e.target.value)}
-              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
-              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
-            />
-            <div className="flex gap-2">
-              <button className="btn-cyan flex-1 py-2" onClick={confirmAnnotation}>Place Pin</button>
-              <button className="btn-ghost-cyan px-4 py-2" onClick={() => setPendingPos(null)}>Cancel</button>
+            <div className="flex gap-2 justify-end">
+              <button
+                className="px-4 py-2 text-xs tracking-widest uppercase text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => { setPendingPos(null); setNewLabel(""); setNewDesc(""); setNewMediaUrl(""); setNewVideoUrl(""); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="glass-panel btn-ghost-cyan px-4 py-2 text-xs tracking-widest uppercase disabled:opacity-50"
+                disabled={!newLabel.trim()}
+                onClick={confirmAnnotation}
+              >
+                Save Pin
+              </button>
             </div>
           </div>
         </div>
