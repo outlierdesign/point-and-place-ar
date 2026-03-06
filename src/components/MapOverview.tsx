@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo } from "react";
+import { useRef, useCallback, useMemo, useEffect } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -36,6 +36,13 @@ function TerrainModel({
     const yOff = -box.min.y * scale - 1.2;
     return { normalizedScale: scale, yOffset: yOff };
   }, [scene]);
+
+  // Clean up GLTF cache when unmounting to free GPU memory
+  useEffect(() => {
+    return () => {
+      useGLTF.clear(url);
+    };
+  }, [url]);
 
   const handleClick = useCallback(
     (e: any) => {
@@ -118,12 +125,18 @@ function KeyboardNav() {
 
   const onDown = useCallback((e: KeyboardEvent) => {
     if (
-      ["w", "a", "s", "d", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
+      ["w", "a", "s", "d", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
+        e.key
+      )
     ) {
       keys.current.add(e.key);
     }
   }, []);
-  const onUp = useCallback((e: KeyboardEvent) => keys.current.delete(e.key), []);
+
+  const onUp = useCallback(
+    (e: KeyboardEvent) => keys.current.delete(e.key),
+    []
+  );
 
   useFrame((_, delta) => {
     const accel = 8;
@@ -134,11 +147,17 @@ function KeyboardNav() {
       camera.getWorldDirection(forward);
       forward.y = 0;
       forward.normalize();
-      const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
-      if (keys.current.has("w") || keys.current.has("ArrowUp")) target.addScaledVector(forward, 1);
-      if (keys.current.has("s") || keys.current.has("ArrowDown")) target.addScaledVector(forward, -1);
-      if (keys.current.has("a") || keys.current.has("ArrowLeft")) target.addScaledVector(right, -1);
-      if (keys.current.has("d") || keys.current.has("ArrowRight")) target.addScaledVector(right, 1);
+      const right = new THREE.Vector3()
+        .crossVectors(forward, camera.up)
+        .normalize();
+      if (keys.current.has("w") || keys.current.has("ArrowUp"))
+        target.addScaledVector(forward, 1);
+      if (keys.current.has("s") || keys.current.has("ArrowDown"))
+        target.addScaledVector(forward, -1);
+      if (keys.current.has("a") || keys.current.has("ArrowLeft"))
+        target.addScaledVector(right, -1);
+      if (keys.current.has("d") || keys.current.has("ArrowRight"))
+        target.addScaledVector(right, 1);
       if (target.lengthSq() > 0) target.normalize();
       velocity.current.addScaledVector(target, accel * delta);
     }
@@ -162,6 +181,30 @@ function KeyboardNav() {
   return null;
 }
 
+/* ── WebGL Context Loss Handler ── */
+function ContextLossHandler() {
+  const { gl } = useThree();
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const handleLost = (e: Event) => {
+      e.preventDefault();
+      console.warn("[MapOverview] WebGL context lost — will attempt restore");
+    };
+    const handleRestored = () => {
+      console.log("[MapOverview] WebGL context restored");
+    };
+    canvas.addEventListener("webglcontextlost", handleLost);
+    canvas.addEventListener("webglcontextrestored", handleRestored);
+    return () => {
+      canvas.removeEventListener("webglcontextlost", handleLost);
+      canvas.removeEventListener("webglcontextrestored", handleRestored);
+    };
+  }, [gl]);
+
+  return null;
+}
+
 /* ── Main Export ── */
 interface MapOverviewProps {
   overviewUrl: string;
@@ -174,23 +217,31 @@ export default function MapOverview({
   hotspots,
   onExplore,
 }: MapOverviewProps) {
-  const handleDebugClick = useCallback((pos: [number, number, number]) => {
-    console.log(
-      "%c[MAP DEBUG] Shift+Click position:",
-      "color:#ffb347;font-weight:bold",
-      JSON.stringify(pos)
-    );
-    // Copy to clipboard for easy pasting into HOTSPOT_POSITIONS
-    navigator.clipboard?.writeText(JSON.stringify(pos)).catch(() => {});
-  }, []);
+  const handleDebugClick = useCallback(
+    (pos: [number, number, number]) => {
+      console.log(
+        "%c[MAP DEBUG] Shift+Click position:",
+        "color:#ffb347;font-weight:bold",
+        JSON.stringify(pos)
+      );
+      // Copy to clipboard for easy pasting into HOTSPOT_POSITIONS
+      navigator.clipboard?.writeText(JSON.stringify(pos)).catch(() => {});
+    },
+    []
+  );
 
   return (
     <Canvas
       shadows
       camera={{ position: [0, 4, 8], fov: 50 }}
-      gl={{ antialias: true, alpha: false }}
+      gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
       style={{ background: "transparent", cursor: "grab" }}
+      onCreated={({ gl }) => {
+        // Limit pixel ratio to reduce GPU load on high-DPI screens
+        gl.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      }}
     >
+      <ContextLossHandler />
       <MapBackground />
       <KeyboardNav />
       <Bounds fit clip observe margin={1.8}>
