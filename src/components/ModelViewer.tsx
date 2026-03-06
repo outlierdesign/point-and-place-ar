@@ -11,6 +11,49 @@ import {
 import * as THREE from "three";
 import AnnotationPin, { Annotation } from "./AnnotationPin";
 
+/* ── Camera zoom helper (lives inside the Canvas) ── */
+function CameraZoomer({
+  target,
+  onComplete,
+}: {
+  target: { position: [number, number, number]; groupMatrix: THREE.Matrix4 } | null;
+  onComplete: () => void;
+}) {
+  const { camera } = useThree();
+  const progress = useRef(0);
+  const startPos = useRef(new THREE.Vector3());
+  const endPos = useRef(new THREE.Vector3());
+  const active = useRef(false);
+
+  useEffect(() => {
+    if (!target) { active.current = false; return; }
+    // Convert annotation local position → world position
+    const worldPos = new THREE.Vector3(...target.position).applyMatrix4(target.groupMatrix);
+    startPos.current.copy(camera.position);
+    // Aim for a point partway toward the annotation (70% of the way)
+    endPos.current.lerpVectors(camera.position, worldPos, 0.7);
+    progress.current = 0;
+    active.current = true;
+  }, [target, camera]);
+
+  useFrame((_, delta) => {
+    if (!active.current) return;
+    progress.current += delta / 1.2; // 1.2s duration
+    if (progress.current >= 1) {
+      active.current = false;
+      onComplete();
+      return;
+    }
+    // Ease-in-out
+    const t = progress.current < 0.5
+      ? 2 * progress.current * progress.current
+      : 1 - Math.pow(-2 * progress.current + 2, 2) / 2;
+    camera.position.lerpVectors(startPos.current, endPos.current, t);
+  });
+
+  return null;
+}
+
 function SceneModel({
   url,
   isPlacingMode,
@@ -19,6 +62,9 @@ function SceneModel({
   selectedId,
   onSelectAnnotation,
   onDeleteAnnotation,
+  onExploreLinked,
+  linkedModelIds,
+  onGroupMatrix,
 }: {
   url: string;
   isPlacingMode: boolean;
@@ -27,30 +73,36 @@ function SceneModel({
   selectedId: string | null;
   onSelectAnnotation: (id: string) => void;
   onDeleteAnnotation: (id: string) => void;
+  onExploreLinked?: (modelId: string, position: [number, number, number]) => void;
+  linkedModelIds?: Set<string>;
+  onGroupMatrix?: (m: THREE.Matrix4) => void;
 }) {
   const { scene } = useGLTF(url);
   const groupRef = useRef<THREE.Group>(null);
 
-  // Compute a uniform scale so the model fits within ~4 world units
   const { normalizedScale, yOffset, pinScale } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(scene);
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
     const scale = maxDim === 0 ? 1 : 4 / maxDim;
-    // Place model bottom on the grid plane (y = -1.2)
     const yOff = -box.min.y * scale - 1.2;
-    // Pin geometry was designed for a ~4-unit model; scale pins so they remain
-    // visually consistent regardless of the model's original dimensions.
     const pScale = maxDim === 0 ? 1 : maxDim / 4;
     return { normalizedScale: scale, yOffset: yOff, pinScale: pScale };
   }, [scene]);
+
+  // Expose group world matrix so CameraZoomer can convert local → world
+  useFrame(() => {
+    if (groupRef.current && onGroupMatrix) {
+      groupRef.current.updateWorldMatrix(true, false);
+      onGroupMatrix(groupRef.current.matrixWorld);
+    }
+  });
 
   const handleClick = useCallback(
     (e: ThreeEvent<MouseEvent>) => {
       if (!isPlacingMode) return;
       e.stopPropagation();
-      // Convert world-space click to the model group's local space
       if (!groupRef.current) return;
       const localPoint = groupRef.current.worldToLocal(e.point.clone());
       onPlace([
@@ -74,6 +126,8 @@ function SceneModel({
           selected={selectedId === ann.id}
           onSelect={onSelectAnnotation}
           onDelete={onDeleteAnnotation}
+          onExploreLinked={onExploreLinked}
+          isLinked={!!(ann.linked_model_id && linkedModelIds?.has(ann.linked_model_id))}
           pinScale={pinScale}
         />
       ))}
@@ -182,6 +236,10 @@ interface ModelViewerProps {
   onPlace: (pos: [number, number, number]) => void;
   onSelectAnnotation: (id: string) => void;
   onDeleteAnnotation: (id: string) => void;
+  onExploreLinked?: (modelId: string, position: [number, number, number]) => void;
+  linkedModelIds?: Set<string>;
+  zoomTarget?: { position: [number, number, number] } | null;
+  onZoomComplete?: () => void;
 }
 
 export default function ModelViewer({
@@ -193,7 +251,18 @@ export default function ModelViewer({
   onPlace,
   onSelectAnnotation,
   onDeleteAnnotation,
+  onExploreLinked,
+  linkedModelIds,
+  zoomTarget,
+  onZoomComplete,
 }: ModelViewerProps) {
+  const groupMatrixRef = useRef<THREE.Matrix4>(new THREE.Matrix4());
+
+  const zoomData = useMemo(() => {
+    if (!zoomTarget) return null;
+    return { position: zoomTarget.position, groupMatrix: groupMatrixRef.current };
+  }, [zoomTarget]);
+
   return (
     <Canvas
       shadows
@@ -204,6 +273,7 @@ export default function ModelViewer({
       <SceneBackground />
       <CursorSetter isPlacingMode={isPlacingMode} />
       <KeyboardControls enabled={!isPlacingMode} />
+      <CameraZoomer target={zoomData} onComplete={onZoomComplete ?? (() => {})} />
 
       <Bounds fit clip observe margin={1.5}>
         <SceneModel
@@ -215,6 +285,9 @@ export default function ModelViewer({
           selectedId={selectedId}
           onSelectAnnotation={onSelectAnnotation}
           onDeleteAnnotation={onDeleteAnnotation}
+          onExploreLinked={onExploreLinked}
+          linkedModelIds={linkedModelIds}
+          onGroupMatrix={(m) => { groupMatrixRef.current.copy(m); }}
         />
       </Bounds>
 
