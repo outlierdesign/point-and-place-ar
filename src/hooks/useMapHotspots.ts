@@ -17,21 +17,22 @@ const HOTSPOT_POSITIONS: Record<string, [number, number, number]> = {
   "Stone Dam.glb":        [0.3, 0.7, 1.8],
 };
 
-// The overview model name — excluded from hotspots
-const OVERVIEW_MODEL_NAME = "Glashapullagh Jan 2025";
+// The overview model prefix — models matching this are excluded from hotspots.
+// We prefer the "cropped" variant (smaller file, less GPU memory).
+const OVERVIEW_MODEL_PREFIX = "Glashapullagh Jan 2025";
 
 export function useMapHotspots() {
   const { models, loading } = useModels();
 
   const hotspots = useMemo<MapHotspot[]>(() => {
     if (loading || models.length === 0) return [];
-
     return models
-      .filter((m) => !m.name.startsWith(OVERVIEW_MODEL_NAME))
+      .filter((m) => !m.name.startsWith(OVERVIEW_MODEL_PREFIX))
       .map((m) => {
-        const pos = HOTSPOT_POSITIONS[m.name + ".glb"] ??
-                    HOTSPOT_POSITIONS[m.name] ??
-                    [Math.random() * 3 - 1.5, 0.5, Math.random() * 3 - 1.5];
+        const pos =
+          HOTSPOT_POSITIONS[m.name] ??
+          HOTSPOT_POSITIONS[m.name.replace(/\.glb$/i, "") + ".glb"] ??
+          [Math.random() * 3 - 1.5, 0.5, Math.random() * 3 - 1.5];
         return {
           modelId: m.id,
           label: m.name.replace(/\.glb$/i, ""),
@@ -40,10 +41,16 @@ export function useMapHotspots() {
       });
   }, [models, loading]);
 
-  const overviewModel = useMemo(
-    () => models.find((m) => m.name.startsWith(OVERVIEW_MODEL_NAME)) ?? null,
-    [models]
-  );
+  // Prefer the cropped version of the overview model (smaller, less GPU memory).
+  // Fall back to the full version if cropped is not available.
+  const overviewModel = useMemo(() => {
+    const cropped = models.find((m) =>
+      m.name.toLowerCase().includes("cropped") &&
+      m.name.startsWith(OVERVIEW_MODEL_PREFIX)
+    );
+    if (cropped) return cropped;
+    return models.find((m) => m.name.startsWith(OVERVIEW_MODEL_PREFIX)) ?? null;
+  }, [models]);
 
   return { hotspots, overviewModel, loading };
 }
