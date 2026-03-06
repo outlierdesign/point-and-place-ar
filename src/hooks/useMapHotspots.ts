@@ -8,17 +8,14 @@ export interface MapHotspot {
   description?: string;
 }
 
-// Hardcoded positions on the Glashapullagh overview model.
-// To find new positions: hold Shift + Click on the overview model
-// and check the browser console for logged coordinates.
+/* Hotspot positions in the overview model's local coordinate space.
+   Use Shift+Click in the map view to log coordinates, then paste here. */
 const HOTSPOT_POSITIONS: Record<string, [number, number, number]> = {
-  "Peatland.glb":         [1.2, 0.8, -0.5],
-  "Composite Dams.glb":   [-1.5, 0.6, 1.0],
-  "Stone Dam.glb":        [0.3, 0.7, 1.8],
+  "Peatland.glb":         [0.0, 0.5, -0.3],
+  "Composite Dams.glb":   [-0.6, 0.5, 0.4],
+  "Stone Dam.glb":        [0.5, 0.5, 0.5],
 };
 
-// The overview model prefix — models matching this are excluded from hotspots.
-// We prefer the "cropped" variant (smaller file, less GPU memory).
 const OVERVIEW_MODEL_PREFIX = "Glashapullagh Jan 2025";
 
 export function useMapHotspots() {
@@ -41,12 +38,12 @@ export function useMapHotspots() {
       });
   }, [models, loading]);
 
-  // Prefer the cropped version of the overview model (smaller, less GPU memory).
-  // Fall back to the full version if cropped is not available.
+  /* Prefer the cropped variant (smaller file, less GPU memory). */
   const overviewModel = useMemo(() => {
-    const cropped = models.find((m) =>
-      m.name.toLowerCase().includes("cropped") &&
-      m.name.startsWith(OVERVIEW_MODEL_PREFIX)
+    const cropped = models.find(
+      (m) =>
+        m.name.toLowerCase().includes("cropped") &&
+        m.name.startsWith(OVERVIEW_MODEL_PREFIX)
     );
     if (cropped) return cropped;
     return models.find((m) => m.name.startsWith(OVERVIEW_MODEL_PREFIX)) ?? null;
