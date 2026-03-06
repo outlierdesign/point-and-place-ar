@@ -1,21 +1,30 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2 } from "lucide-react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2, Map } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer from "@/components/ModelViewer";
+import MapOverview from "@/components/MapOverview";
 import AnnotationPanel from "@/components/AnnotationPanel";
 import ModelLibrary from "@/components/ModelLibrary";
 import { Annotation } from "@/components/AnnotationPin";
 import { useAuth } from "@/hooks/useAuth";
 import { useModels } from "@/hooks/useModels";
 import { useAnnotations } from "@/hooks/useAnnotations";
+import { useMapHotspots } from "@/hooks/useMapHotspots";
 import { ModelRecord } from "@/components/ModelLibrary";
 import { supabase } from "@/integrations/supabase/client";
 import ModelLoadingOverlay from "@/components/ModelLoadingOverlay";
 import { useProgressiveModel } from "@/hooks/useProgressiveModel";
+
 export default function Index() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const { models, loading: modelsLoading, refetch: refetchModels } = useModels();
+  const { hotspots, overviewModel } = useMapHotspots();
+
+  // ── View mode: viewer (single model) or map (overview with hotspots) ──
+  const [viewMode, setViewMode] = useState<"viewer" | "map">("viewer");
+  const [cameFromMap, setCameFromMap] = useState(false);
+
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPlacingMode, setIsPlacingMode] = useState(false);
@@ -32,7 +41,7 @@ export default function Index() {
 
   // Model display state
   const [modelUrl, setModelUrl] = useState<string | null>(null);
-const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = useProgressiveModel({ url: modelUrl });
+  const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = useProgressiveModel({ url: modelUrl });
   const [modelKey, setModelKey] = useState("default");
   const [modelName, setModelName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -43,11 +52,18 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
   const dragCounterRef = useRef(0);
   const arQuickLookRef = useRef<HTMLAnchorElement>(null);
 
-  // iOS detection (covers iPhone, iPad, iPod, and modern iPads reporting MacIntel)
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  // ── Overview model progressive loading ──
+  const overviewUrl = overviewModel
+    ? supabase.storage.from("models").getPublicUrl(overviewModel.storage_path).data.publicUrl
+    : null;
+  const {
+    progress: overviewProgress,
+    isReady: overviewReady,
+    blobUrl: overviewBlobUrl,
+  } = useProgressiveModel({ url: viewMode === "map" ? overviewUrl : null });
 
-  // AR Quick Look only works with public HTTPS URLs — not blob: URLs (local files)
+  // iOS detection
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const modelUrlIsPublic = !!modelUrl && modelUrl.startsWith("https://");
   const iosArAvailable = isIOS && modelUrlIsPublic;
 
@@ -56,10 +72,38 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
     return data.publicUrl;
   }, []);
 
-  const { annotations, addAnnotation, updateAnnotation, deleteAnnotation, clearAll } =
-    useAnnotations(selectedModelId);
+  const { annotations, addAnnotation, updateAnnotation, deleteAnnotation, clearAll } = useAnnotations(selectedModelId);
 
-  // Auto-select first model (Peatland.glb) when library loads
+  // ── Map explore handler ──
+  const handleExplore = useCallback(
+    (modelId: string) => {
+      const model = models.find((m) => m.id === modelId);
+      if (!model) return;
+      const url = getPublicUrl(model.storage_path);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      setSelectedId(null);
+      setIsPlacingMode(false);
+      setPendingPos(null);
+      setSelectedModelId(model.id);
+      setModelUrl(url);
+      setModelKey(`db_${model.id}`);
+      setModelName(model.name);
+      setLoadError(null);
+      setViewMode("viewer");
+      setCameFromMap(true);
+    },
+    [models, getPublicUrl]
+  );
+
+  const handleBackToMap = useCallback(() => {
+    setViewMode("map");
+    setCameFromMap(false);
+  }, []);
+
+  // Auto-select first model when library loads
   useEffect(() => {
     if (!modelsLoading && models.length > 0 && selectedModelId === null && modelUrl === null) {
       const first = models[0];
@@ -72,7 +116,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
   }, [modelsLoading, models, selectedModelId, modelUrl, getPublicUrl]);
 
   useEffect(() => {
-    // AR: check WebXR on Android / desktop
     if (!isIOS) {
       if (navigator.xr) {
         navigator.xr.isSessionSupported("immersive-ar").then(setArSupported);
@@ -80,7 +123,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         setArSupported(false);
       }
     }
-    // iOS: AR Quick Look is always available when a model is loaded
   }, [isIOS]);
 
   useEffect(() => {
@@ -115,6 +157,8 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
     setModelUrl(url);
     setModelKey(`custom_${Date.now()}`);
     setModelName(file.name);
+    setViewMode("viewer");
+    setCameFromMap(false);
   }, []);
 
   const handleSelectModel = useCallback((model: ModelRecord, url: string) => {
@@ -130,8 +174,9 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
     setModelKey(`db_${model.id}`);
     setModelName(model.name);
     setLoadError(null);
-    // Close drawer on mobile after selecting
     setModelsOpen(false);
+    setViewMode("viewer");
+    setCameFromMap(false);
   }, []);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -188,7 +233,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
   };
 
   const handleAR = async () => {
-    // iOS Safari: use AR Quick Look (GLB supported from iOS 15+)
     if (isIOS) {
       if (!iosArAvailable) {
         if (isIOS && modelUrl && !modelUrlIsPublic) {
@@ -196,7 +240,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         }
         return;
       }
-      // Temporarily make the anchor pointer-events active, click it, then restore
       const anchor = arQuickLookRef.current;
       if (anchor) {
         anchor.style.pointerEvents = "auto";
@@ -205,7 +248,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
       }
       return;
     }
-    // Android / desktop: WebXR
     if (!arSupported) return;
     try {
       const session = await (navigator.xr as unknown as { requestSession: (type: string, opts: object) => Promise<{ end: () => void }> }).requestSession("immersive-ar", {
@@ -223,7 +265,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
     setExporting(true);
     try {
       if (isIOS && modelUrlIsPublic) {
-        // iOS: open in AR Quick Look using direct URL with #.usdz hint
         const anchor = arQuickLookRef.current;
         if (anchor) {
           anchor.href = modelUrl + "#.usdz";
@@ -232,7 +273,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
           anchor.style.pointerEvents = "none";
         }
       } else {
-        // All platforms: direct download
         const a = document.createElement("a");
         a.href = modelUrl;
         a.download = `${modelName || "model"}.glb`;
@@ -247,10 +287,7 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
     }
   };
 
-  const embedUrl = selectedModelId
-    ? `${window.location.origin}/embed/${selectedModelId}`
-    : null;
-
+  const embedUrl = selectedModelId ? `${window.location.origin}/embed/${selectedModelId}` : null;
   const copyEmbedUrl = () => {
     if (embedUrl) {
       navigator.clipboard.writeText(
@@ -279,8 +316,7 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
     >
       <input ref={fileInputRef} type="file" accept=".gltf,.glb" className="hidden" onChange={handleFileInput} />
 
-      {/* iOS AR Quick Look anchor — must NOT be display:none; Safari won't intercept hidden anchors */}
-      {/* Visually hidden via zero dimensions but remains in the DOM and interactive */}
+      {/* iOS AR Quick Look anchor */}
       <a
         ref={arQuickLookRef}
         rel="ar"
@@ -290,35 +326,58 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAABJRU5ErkJggg==" alt="" />
       </a>
 
-      {/* 3D Canvas — full screen always */}
+      {/* 3D Canvas — full screen */}
       <div className="absolute inset-0 z-0">
-        <Suspense
-          fallback={
+        {viewMode === "map" ? (
+          /* ── MAP OVERVIEW MODE ── */
+          overviewReady && overviewBlobUrl ? (
+            <MapOverview
+              overviewUrl={overviewBlobUrl}
+              hotspots={hotspots}
+              onExplore={handleExplore}
+            />
+          ) : (
             <div className="w-full h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-8 h-8 border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--gold))", borderTopColor: "transparent" }} />
-                <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--gold))" }}>LOADING MODEL...</div>
+                <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--gold))" }}>LOADING MAP...</div>
               </div>
             </div>
-          }
-        >
-          {modelUrl && modelReady && (
-            <ModelViewer
-              modelUrl={modelBlobUrl || modelUrl}
-              modelKey={modelKey}
-              annotations={annotations}
-              selectedId={selectedId}
-              isPlacingMode={isPlacingMode}
-              onPlace={handlePlace}
-              onSelectAnnotation={setSelectedId}
-              onDeleteAnnotation={deleteAnnotation}
-            />
-          )}
-        </Suspense>
+          )
+        ) : (
+          /* ── SINGLE MODEL VIEWER MODE ── */
+          <Suspense
+            fallback={
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-2 border-t-transparent animate-spin" style={{ borderColor: "hsl(var(--gold))", borderTopColor: "transparent" }} />
+                  <div className="font-mono text-xs tracking-widest" style={{ color: "hsl(var(--gold))" }}>LOADING MODEL...</div>
+                </div>
+              </div>
+            }
+          >
+            {modelUrl && modelReady && (
+              <ModelViewer
+                modelUrl={modelBlobUrl || modelUrl}
+                modelKey={modelKey}
+                annotations={annotations}
+                selectedId={selectedId}
+                isPlacingMode={isPlacingMode}
+                onPlace={handlePlace}
+                onSelectAnnotation={setSelectedId}
+                onDeleteAnnotation={deleteAnnotation}
+              />
+            )}
+          </Suspense>
+        )}
       </div>
 
-      {/* Progress bar overlay — outside canvas z-0 container for proper stacking */}
-      <ModelLoadingOverlay progress={modelProgress} />
+      {/* Progress overlay */}
+      {viewMode === "map" ? (
+        <ModelLoadingOverlay progress={overviewProgress} />
+      ) : (
+        <ModelLoadingOverlay progress={modelProgress} />
+      )}
 
       {/* Drag overlay */}
       {isDragging && (
@@ -333,7 +392,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
 
       {/* ── Top bar ── */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-3 md:px-5 py-3">
-        {/* Logo badge */}
         <div className="glass-panel flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2">
           <Layers size={14} style={{ color: "hsl(var(--gold))" }} />
           <span className="font-mono text-xs font-bold tracking-widest uppercase" style={{ color: "hsl(var(--foreground))" }}>
@@ -341,11 +399,21 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
           </span>
           <div className="hidden md:block w-px h-3 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
           <span className="hidden md:block font-mono text-xs max-w-48 truncate" style={{ color: "hsl(var(--muted-foreground))" }}>
-            {modelName}
+            {viewMode === "map" ? "Overview Map" : modelName}
           </span>
         </div>
 
-        {/* Top-right auth button — desktop only */}
+        {/* Back to Map button — shown when came from map */}
+        {viewMode === "viewer" && cameFromMap && (
+          <button
+            className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2 fade-in"
+            onClick={handleBackToMap}
+          >
+            <Map size={12} />
+            <span className="tracking-widest uppercase text-xs">Back to Map</span>
+          </button>
+        )}
+
         <div className="hidden md:flex items-center gap-2">
           {user ? (
             <button className="glass-panel btn-ghost-cyan px-3 py-2 flex items-center gap-2" onClick={signOut} title="Sign out">
@@ -360,7 +428,6 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
           )}
         </div>
 
-        {/* Mobile top-right auth icon */}
         <div className="flex md:hidden items-center">
           {user ? (
             <button className="glass-panel p-2.5" style={{ color: "hsl(var(--muted-foreground))" }} onClick={signOut} title="Sign out">
@@ -374,7 +441,7 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         </div>
       </div>
 
-      {/* ── Off-canvas backdrop (all breakpoints) ── */}
+      {/* ── Off-canvas backdrop ── */}
       {(modelsOpen || annotationsOpen) && (
         <div
           className="fixed inset-0 z-30"
@@ -383,7 +450,7 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         />
       )}
 
-      {/* ── Models drawer (slides from left, all breakpoints) ── */}
+      {/* ── Models drawer ── */}
       <div
         className="fixed inset-y-0 left-0 z-40 w-72 md:w-80 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-24 px-3"
         style={{ transform: modelsOpen ? "translateX(0)" : "translateX(-100%)" }}
@@ -397,7 +464,7 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         />
       </div>
 
-      {/* ── Annotations drawer (slides from right, all breakpoints) ── */}
+      {/* ── Annotations drawer ── */}
       <div
         className="fixed inset-y-0 right-0 z-40 w-72 md:w-80 transition-transform duration-300 ease-in-out flex flex-col pt-14 pb-24 px-3"
         style={{ transform: annotationsOpen ? "translateX(0)" : "translateX(100%)" }}
@@ -407,9 +474,7 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
           selectedId={selectedId}
           onSelect={setSelectedId}
           onDelete={deleteAnnotation}
-          onUpdate={(id, label, desc, media_url, video_url) =>
-            updateAnnotation(id, label, desc, media_url, video_url)
-          }
+          onUpdate={(id, label, desc, media_url, video_url) => updateAnnotation(id, label, desc, media_url, video_url)}
           isPlacingMode={isPlacingMode}
           onTogglePlacingMode={() => setIsPlacingMode((v) => !v)}
           onClearAll={clearAll}
@@ -418,7 +483,7 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         />
       </div>
 
-      {/* ── Unified bottom dock (mobile + desktop) ── */}
+      {/* ── Unified bottom dock ── */}
       <div
         className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 px-3 py-2 glass-panel"
         style={{ borderColor: "hsl(var(--glass-border))" }}
@@ -434,6 +499,30 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         </button>
 
         <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+
+        {/* MAP — toggle overview */}
+        {overviewModel && (
+          <>
+            <button
+              className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
+              style={{ color: viewMode === "map" ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+              onClick={() => {
+                if (viewMode === "map") {
+                  setViewMode("viewer");
+                  setCameFromMap(false);
+                } else {
+                  setViewMode("map");
+                  setCameFromMap(false);
+                }
+              }}
+              title={viewMode === "map" ? "Return to model viewer" : "Open 3D overview map"}
+            >
+              <Map size={18} />
+              <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>MAP</span>
+            </button>
+            <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
+          </>
+        )}
 
         {/* Annotations */}
         <button
@@ -452,15 +541,11 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
           className="flex flex-col items-center gap-1 px-4 py-2 transition-colors"
           style={{
             color: iosArAvailable || arSupported ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
-            opacity: iosArAvailable || arSupported ? 1 : 0.4
+            opacity: iosArAvailable || arSupported ? 1 : 0.4,
           }}
           onClick={handleAR}
           disabled={isIOS ? !iosArAvailable : !arSupported}
-          title={
-            isIOS
-              ? iosArAvailable ? "Open in AR Quick Look (iOS 15+)" : "Load a library model first"
-              : arSupported ? "Enter AR mode" : "AR not supported on this device"
-          }
+          title={isIOS ? (iosArAvailable ? "Open in AR Quick Look (iOS 15+)" : "Load a library model first") : (arSupported ? "Enter AR mode" : "AR not supported on this device")}
         >
           <Crosshair size={18} />
           <span className="font-mono" style={{ fontSize: 9, letterSpacing: "0.08em" }}>
@@ -468,8 +553,8 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
           </span>
         </button>
 
-        {/* Export — visible when a library model is selected */}
-        {selectedModelId && (
+        {/* Export */}
+        {selectedModelId && viewMode === "viewer" && (
           <>
             <div className="w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
             <button
@@ -487,7 +572,7 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
           </>
         )}
 
-        {/* Admin: Load Local — desktop only */}
+        {/* Admin: Load Local */}
         {isAdmin && (
           <>
             <div className="hidden md:block w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
@@ -503,8 +588,8 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
           </>
         )}
 
-        {/* Embed — desktop only */}
-        {embedUrl && (
+        {/* Embed */}
+        {embedUrl && viewMode === "viewer" && (
           <>
             <div className="hidden md:block w-px h-8 mx-1" style={{ background: "hsl(var(--glass-border))" }} />
             <button
@@ -520,13 +605,18 @@ const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = 
         )}
       </div>
 
-      {/* Bottom-left controls hint — desktop only */}
+      {/* Bottom-left controls hint */}
       <div className="hidden md:block absolute bottom-5 left-5 z-20 glass-panel px-3 py-2">
         <div className="font-mono space-y-1" style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>
           <div><span style={{ color: "hsl(var(--gold))" }}>Drag</span> — Orbit</div>
           <div><span style={{ color: "hsl(var(--gold))" }}>Scroll</span> — Zoom</div>
           <div><span style={{ color: "hsl(var(--gold))" }}>Right drag</span> — Pan</div>
-          {isAdmin && (
+          {viewMode === "map" && (
+            <div style={{ borderTop: "1px solid hsl(var(--glass-border))", paddingTop: 4, marginTop: 2 }}>
+              <span style={{ color: "hsl(var(--gold))" }}>Shift+Click</span> — Log position
+            </div>
+          )}
+          {isAdmin && viewMode === "viewer" && (
             <div style={{ borderTop: "1px solid hsl(var(--glass-border))", paddingTop: 4, marginTop: 2 }}>
               <span style={{ color: "hsl(var(--gold))" }}>Drop</span> .gltf / .glb to load
             </div>
