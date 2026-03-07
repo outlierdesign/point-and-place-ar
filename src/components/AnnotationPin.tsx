@@ -138,7 +138,7 @@ export default function AnnotationPin({
           }}
         >
           {isLinked && (
-            <span style={{ fontSize: 9, lineHeight: 1, color: linkedColor }}>\u25B6</span>
+            <span style={{ fontSize: 9, lineHeight: 1, color: linkedColor }}>{"▶"}</span>
           )}
           <span
             style={{
