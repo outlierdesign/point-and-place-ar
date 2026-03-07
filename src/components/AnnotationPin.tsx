@@ -7,7 +7,7 @@ export interface Annotation {
   id: string;
   position: [number, number, number];
   label: string;
-  description: string;
+  description: string
   media_url?: string;
   video_url?: string;
   linked_model_id?: string | null;
@@ -188,7 +188,7 @@ export default function AnnotationPin({
               <div style={{ color: "#C9954E", fontWeight: 600, fontSize: "clamp(10px, 1.2vw, 14px)", fontFamily: "'Red Hat Display', sans-serif", wordBreak: "break-word", whiteSpace: "normal", lineHeight: 1.3, flex: 1 }}>
                 {annotation.label}
               </div>
-              <button onClick={(e) => { e.stopPropagation(); setExpanded(false); }} style={{ background: "none", border: "none", color: "#7a5720", fontSize: 12, lineHeight: 1, cursor: "pointer", padding: "0 1px", flexShrink: 0 }}>\u00d7</button>
+              <button onClick={(e) => { e.stopPropagation(); setExpanded(false); }} style={{ background: "none", border: "none", color: "#7a5720", fontSize: 12, lineHeight: 1, cursor: "pointer", padding: "0 1px", flexShrink: 0 }}>{"×"}</button>
             </div>
 
             {annotation.description && (
@@ -213,7 +213,7 @@ export default function AnnotationPin({
                 onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }}
                 style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 4, background: "rgba(167,120,43,0.18)", border: "1px solid #A7782B60", color: "#C9954E", fontFamily: "'Red Hat Display', sans-serif", fontSize: "clamp(8px, 0.9vw, 12px)", padding: "3px 7px", cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase", width: "100%", justifyContent: "center", borderRadius: 2 }}
               >
-                \u25B6 Play Video
+                {"▶"} Play Video
               </button>
             )}
 
@@ -225,7 +225,7 @@ export default function AnnotationPin({
               >
                 <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
                   <img src={annotation.media_url} alt="Full size" style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", display: "block" }} onClick={(e) => e.stopPropagation()} />
-                  <button onClick={() => setLightboxOpen(false)} style={{ position: "absolute", top: -12, right: -12, background: "#192C20", border: "1px solid #A7782B", color: "#C9954E", width: 28, height: 28, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>\u00d7</button>
+                  <button onClick={() => setLightboxOpen(false)} style={{ position: "absolute", top: -12, right: -12, background: "#192C20", border: "1px solid #A7782B", color: "#C9954E", width: 28, height: 28, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>{"×"}</button>
                 </div>
               </div>,
               document.body
@@ -246,7 +246,7 @@ export default function AnnotationPin({
                       title="Video"
                     />
                   </div>
-                  <button onClick={() => setVideoOpen(false)} style={{ position: "absolute", top: -12, right: -12, background: "#192C20", border: "1px solid #A7782B", color: "#C9954E", width: 28, height: 28, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>\u00d7</button>
+                  <button onClick={() => setVideoOpen(false)} style={{ position: "absolute", top: -12, right: -12, background: "#192C20", border: "1px solid #A7782B", color: "#C9954E", width: 28, height: 28, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>{"×"}</button>
                 </div>
               </div>,
               document.body
