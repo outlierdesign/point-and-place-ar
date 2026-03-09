@@ -77,7 +77,7 @@ function SceneModel({
   linkedModelIds?: Set<string>;
   onGroupMatrix?: (m: THREE.Matrix4) => void;
 }) {
-  const { scene } = useGLTF(url);
+  const { scene } = useGLTF(url, true);
   const groupRef = useRef<THREE.Group>(null);
 
   const { normalizedScale, yOffset, pinScale } = useMemo(() => {
