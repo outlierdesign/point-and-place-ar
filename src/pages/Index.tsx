@@ -301,8 +301,9 @@ export default function Index() {
         loader.load(modelBlobUrl || modelUrl, resolve, undefined, reject);
       });
       const exporter = new USDZExporter();
-      const arraybuffer = await exporter.parse(gltf.scene, undefined as any, undefined as any);
-      const blob = new Blob([arraybuffer as BlobPart], { type: "model/vnd.usdz+zip" });
+      const result = await (exporter as any).parse(gltf.scene);
+      const arraybuffer = result instanceof ArrayBuffer ? result : new ArrayBuffer(0);
+      const blob = new Blob([arraybuffer], { type: "model/vnd.usdz+zip" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = (modelName || "model").replace(/\.glb$/i, "") + ".usdz";
