@@ -359,6 +359,7 @@ export default function Index() {
       {modelUrl && modelReady && (modelBlobUrl || modelUrl) ? (
         <ModelViewer
           modelUrl={modelBlobUrl || modelUrl}
+          originalUrl={modelUrl}
           modelKey={modelKey}
           annotations={enrichedAnnotations}
           selectedId={selectedId}
