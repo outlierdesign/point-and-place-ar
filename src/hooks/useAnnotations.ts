@@ -90,6 +90,8 @@ export function useAnnotations(modelId: string | null) {
     description: string,
     media_url?: string,
     video_url?: string,
+    tooltip_type?: string,
+    linked_model_id?: string,
   ) => {
     await supabase
       .from("annotations")
@@ -98,11 +100,13 @@ export function useAnnotations(modelId: string | null) {
         description: description || null,
         media_url: media_url || null,
         video_url: video_url || null,
+        tooltip_type: tooltip_type || "info",
+        linked_model_id: linked_model_id || null,
       })
       .eq("id", id);
     setAnnotations((prev) =>
       prev.map((a) =>
-        a.id === id ? { ...a, label, description, media_url, video_url } : a
+        a.id === id ? { ...a, label, description, media_url, video_url, tooltip_type: tooltip_type as Annotation["tooltip_type"], linked_model_id } : a
       )
     );
   }, []);
