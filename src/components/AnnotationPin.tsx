@@ -29,8 +29,11 @@ interface AnnotationPinProps {
 const getVideoEmbed = (url: string) => {
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/]+)/);
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1`;
-  const vimeo = url.match(/vimeo\.com\/(\d+)/);
-  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1`;
+  const vimeo = url.match(/vimeo\.com\/(\d+)(?:\/([a-zA-Z0-9]+))?/);
+  if (vimeo) {
+    const hash = vimeo[2] ? `?h=${vimeo[2]}&autoplay=1` : `?autoplay=1`;
+    return `https://player.vimeo.com/video/${vimeo[1]}${hash}`;
+  }
   return url;
 };
 
