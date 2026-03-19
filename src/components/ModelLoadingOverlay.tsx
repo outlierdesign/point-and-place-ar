@@ -2,6 +2,7 @@ import { type ModelLoadingProgress } from "@/hooks/useProgressiveModel";
 
 interface ModelLoadingOverlayProps {
   progress: ModelLoadingProgress;
+  modelName?: string;
 }
 
 function formatBytes(bytes: number): string {

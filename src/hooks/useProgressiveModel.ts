@@ -152,7 +152,7 @@ export function useProgressiveModel({ url }: UseProgressiveModelOptions) {
 
         if (!cancelled) {
           revokePreviousBlob();
-          const blob = new Blob(chunks, { type: "model/gltf-binary" });
+          const blob = new Blob(chunks as BlobPart[], { type: "model/gltf-binary" });
           const newBlobUrl = URL.createObjectURL(blob);
           blobUrlRef.current = newBlobUrl;
           setBlobUrl(newBlobUrl);

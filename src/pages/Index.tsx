@@ -541,7 +541,10 @@ export default function Index() {
             onDelete={deleteAnnotation}
             onUpdate={updateAnnotation}
             onClose={() => setAnnotationsOpen(false)}
-            isAdmin={isAdmin}
+            isPlacingMode={isPlacingMode}
+            onTogglePlacingMode={() => setIsPlacingMode(!isPlacingMode)}
+            onClearAll={clearAll}
+            isReadOnly={!user}
           />
         </div>
       )}
