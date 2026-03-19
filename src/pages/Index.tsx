@@ -18,6 +18,7 @@ function buildLinkedAnnotations(
   models: ModelRecord[],
   currentModelId: string | null
 ): Annotation[] {
+  const modelIds = new Set(models.map((m) => m.id));
   const nameToId = new Map<string, string>();
   for (const m of models) {
     if (m.id === currentModelId) continue;
@@ -25,10 +26,17 @@ function buildLinkedAnnotations(
     nameToId.set(normalised, m.id);
   }
   return annotations.map((ann) => {
-    const normLabel = ann.label.trim().toLowerCase();
-    const matchedId = nameToId.get(normLabel);
-    if (matchedId) {
-      return { ...ann, linked_model_id: matchedId };
+    // If explicitly set as a link tooltip with a valid model, use that
+    if (ann.tooltip_type === "link" && ann.linked_model_id && modelIds.has(ann.linked_model_id)) {
+      return ann;
+    }
+    // Legacy: match by label name for info tooltips
+    if (ann.tooltip_type !== "link") {
+      const normLabel = ann.label.trim().toLowerCase();
+      const matchedId = nameToId.get(normLabel);
+      if (matchedId) {
+        return { ...ann, linked_model_id: matchedId };
+      }
     }
     return ann;
   });
