@@ -523,12 +523,10 @@ export default function Index() {
         <div className="absolute top-0 left-0 bottom-0 z-20 w-80 max-w-[85vw]">
           <ModelLibrary
             models={models}
-            loading={modelsLoading}
             selectedModelId={selectedModelId}
-            onSelectModel={handleSelectModel}
+            onSelectModel={(model, _url) => handleSelectModel(model)}
+            onRefresh={refetchModels}
             onClose={() => setModelsOpen(false)}
-            isAdmin={isAdmin}
-            onModelsChanged={refetchModels}
           />
         </div>
       )}
