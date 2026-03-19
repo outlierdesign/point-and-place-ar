@@ -1,13 +1,14 @@
 import { useRef, useCallback, useMemo, useEffect } from "react";
-import { Canvas, useThree, useFrame, ThreeEvent } from "@react-three/fiber";
+import { Canvas, useThree, useFrame, ThreeEvent, useLoader } from "@react-three/fiber";
 import {
   OrbitControls,
   Environment,
   Grid,
   ContactShadows,
-  useGLTF,
   Bounds,
 } from "@react-three/drei";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import * as THREE from "three";
 import AnnotationPin, { Annotation } from "./AnnotationPin";
 
