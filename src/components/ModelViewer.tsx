@@ -259,6 +259,7 @@ interface ModelViewerProps {
 
 export default function ModelViewer({
   modelUrl,
+  originalUrl,
   modelKey,
   annotations,
   selectedId,
