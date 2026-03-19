@@ -38,6 +38,10 @@ export default function AnnotationPanel({
   const [editDesc, setEditDesc] = useState("");
   const [editMediaUrl, setEditMediaUrl] = useState("");
   const [editVideoUrl, setEditVideoUrl] = useState("");
+  const [editTooltipType, setEditTooltipType] = useState<TooltipType>("info");
+  const [editLinkedModelId, setEditLinkedModelId] = useState("");
+
+  const otherModels = models.filter((m) => m.id !== currentModelId);
 
   const startEdit = (ann: Annotation) => {
     setEditingId(ann.id);
@@ -45,11 +49,19 @@ export default function AnnotationPanel({
     setEditDesc(ann.description);
     setEditMediaUrl(ann.media_url ?? "");
     setEditVideoUrl(ann.video_url ?? "");
+    setEditTooltipType(ann.tooltip_type ?? "info");
+    setEditLinkedModelId(ann.linked_model_id ?? "");
   };
 
   const saveEdit = () => {
     if (editingId) {
-      onUpdate(editingId, editLabel, editDesc, editMediaUrl || undefined, editVideoUrl || undefined);
+      onUpdate(
+        editingId, editLabel, editDesc,
+        editTooltipType === "info" ? (editMediaUrl || undefined) : undefined,
+        editTooltipType === "info" ? (editVideoUrl || undefined) : undefined,
+        editTooltipType,
+        editTooltipType === "link" ? (editLinkedModelId || undefined) : undefined,
+      );
       setEditingId(null);
     }
   };
