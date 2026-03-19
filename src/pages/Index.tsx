@@ -557,6 +557,8 @@ export default function Index() {
             onTogglePlacingMode={() => setIsPlacingMode(!isPlacingMode)}
             onClearAll={clearAll}
             isReadOnly={!user}
+            models={models}
+            currentModelId={selectedModelId}
           />
         </div>
       )}
