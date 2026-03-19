@@ -55,6 +55,8 @@ export function useAnnotations(modelId: string | null) {
     description: string,
     media_url?: string,
     video_url?: string,
+    tooltip_type?: string,
+    linked_model_id?: string,
   ): Promise<Annotation | null> => {
     if (!modelId) return null;
 
@@ -70,8 +72,10 @@ export function useAnnotations(modelId: string | null) {
         position_z: position[2],
         media_url: media_url || null,
         video_url: video_url || null,
+        tooltip_type: tooltip_type || "info",
+        linked_model_id: linked_model_id || null,
       })
-      .select("id, label, description, position_x, position_y, position_z, media_url, video_url")
+      .select("id, label, description, position_x, position_y, position_z, media_url, video_url, tooltip_type, linked_model_id")
       .single();
 
     if (error || !data) return null;
