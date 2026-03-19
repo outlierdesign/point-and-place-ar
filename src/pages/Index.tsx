@@ -51,6 +51,8 @@ export default function Index() {
   const [newDesc, setNewDesc] = useState("");
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [newVideoUrl, setNewVideoUrl] = useState("");
+  const [newTooltipType, setNewTooltipType] = useState<"info" | "link">("info");
+  const [newLinkedModelId, setNewLinkedModelId] = useState("");
   const [arSupported, setArSupported] = useState<boolean | null>(null);
   const [modelsOpen, setModelsOpen] = useState(false);
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
