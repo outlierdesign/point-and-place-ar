@@ -1,82 +1,51 @@
 
 
-# Plan: Fix Annotation Tool — 4 Issues
+# Fix Build Errors, Enable Draco, and Restore Annotation Functionality
 
-## Issue 1: No Ability to Add Imagery or Video Links
+## Build Errors (6 total)
 
-The "New Annotation" modal in `Index.tsx` (lines 543-581) only has label and description fields. Media URL and video URL fields are missing from this creation dialog. The same applies to `Embed.tsx` (lines 157-194).
+### 1. `useProgressiveModel.ts` line 155 — TypeScript type mismatch
+`Uint8Array[]` not assignable to `BlobPart[]`. Fix: cast chunks array when creating Blob.
 
-Additionally, `Embed.tsx` `rowToAnnotation` (line 9-19) does not include `media_url` or `video_url` fields, so even existing annotations with media won't display them in embeds.
+### 2. `Index.tsx` line 304 — `exporter.parse()` expects 3-4 args
+The USDZExporter `.parse()` method signature requires `(scene, onDone, onError)` or similar. Fix: check API and pass correct arguments.
 
-**Changes:**
-- `src/pages/Index.tsx`: Add media URL and video URL input fields to the pending annotation modal, with state variables `newMediaUrl` and `newVideoUrl`. Pass them through to `addAnnotation`.
-- `src/hooks/useAnnotations.ts`: Extend `addAnnotation` to accept optional `media_url` and `video_url` parameters and include them in the insert.
-- `src/pages/Embed.tsx`: Update `rowToAnnotation` to include `media_url` and `video_url`. Update the annotation select query to fetch these fields.
+### 3. `Index.tsx` line 354 — `modelName` prop doesn't exist on `ModelLoadingOverlay`
+`ModelLoadingOverlayProps` only has `progress`. Fix: add `modelName` to the interface.
 
-## Issue 2: Tooltip Marker Reinstated in Embed
+### 4. `Index.tsx` line 526 — `ModelLibrary` props mismatch
+Index passes `loading`, `isAdmin`, `onModelsChanged`, but `ModelLibraryProps` expects `onRefresh`, `onSelectModel(model, url)`. Fix: align the props — update `ModelLibrary` interface to match what Index passes, or update Index to match the component.
 
-The Embed page (`Embed.tsx`) does not fetch `media_url`/`video_url` from the database, so the AnnotationPin expanded card cannot show media or video. The pin 3D geometry (pole, cone, sphere) is present in `AnnotationPin.tsx` and should render correctly. The "tooltip" behavior (collapsed badge + expanded card) is intact in the component.
+### 5. `Index.tsx` line 546 — `AnnotationPanel` doesn't have `isAdmin`
+`AnnotationPanelProps` expects `isPlacingMode`, `onTogglePlacingMode`, `onClearAll` but Index passes `isAdmin` instead. Fix: pass the correct props that `AnnotationPanel` expects.
 
-The fix for this is covered by Issue 1 -- ensuring the Embed page fetches and passes all annotation fields.
+## Draco Compression Support
 
-## Issue 3: Responsive Textbox Sizing (10pt-14pt)
+Enable the Draco decoder in `useGLTF` so compressed models load correctly. Three.js/drei's `useGLTF` with `true` as second arg enables Draco — this is already done in the current code (`useGLTF(url, true)`). Verify this is correct and working.
 
-The expanded card in `AnnotationPin.tsx` uses fixed font sizes (10px label, 9px description, 8px buttons). The collapsed badge uses 8px. These should scale with the viewer/window size.
+## Changes
 
-**Changes in `src/components/AnnotationPin.tsx`:**
-- Use `clamp()` CSS values for font sizes: `clamp(10px, 1.2vw, 14px)` for labels, `clamp(9px, 1vw, 13px)` for descriptions, `clamp(8px, 0.9vw, 12px)` for buttons/badges.
-- Increase `maxWidth` of expanded card from 180px to `clamp(160px, 20vw, 260px)` and `minWidth` from 130px to `clamp(120px, 14vw, 180px)`.
-- Collapsed badge label: `clamp(8px, 1vw, 12px)`.
+### `src/hooks/useProgressiveModel.ts`
+- Line 155: Cast `chunks` to `BlobPart[]` when creating Blob: `new Blob(chunks as BlobPart[], ...)`
 
-## Issue 4: Annotations Only Editable by Signed-In Users
+### `src/components/ModelLoadingOverlay.tsx`
+- Add `modelName?: string` to `ModelLoadingOverlayProps`
+- Display model name in the overlay
 
-Current RLS policies allow anyone (including anonymous/unauthenticated) to INSERT annotations. The user wants only authenticated users to create, update, and delete annotations. Everyone can still view them.
+### `src/pages/Index.tsx`
+- **Line ~304**: Fix `USDZExporter.parse()` call signature
+- **Line ~524-532**: Fix `ModelLibrary` props — pass `onRefresh` instead of `onModelsChanged`, remove `loading`/`isAdmin`, fix `onSelectModel` signature
+- **Line ~539-548**: Fix `AnnotationPanel` props — pass `isPlacingMode`, `onTogglePlacingMode`, `onClearAll`, `isReadOnly={!user}` instead of `isAdmin`
 
-**Database migration:**
-- Drop the existing INSERT policy ("Anyone can insert annotations").
-- Create a new INSERT policy restricted to `authenticated` role.
-- Update the DELETE and UPDATE policies to simply check `auth.uid() IS NOT NULL` (any signed-in user can edit any annotation, not just their own -- based on the user's requirement that annotations are editable by any signed-in user).
-
-**Frontend changes:**
-- `src/pages/Index.tsx`: Hide the "Add Annotation" placing mode and the annotation panel's edit/delete controls when the user is not signed in. Pass an `isReadOnly` prop to `AnnotationPanel`.
-- `src/components/AnnotationPanel.tsx`: Accept an `isReadOnly` prop. When true, hide the "Add Annotation" button, edit/delete buttons, and "Clear All".
-- `src/pages/Embed.tsx`: Remove the "Add Pin" button and placing functionality entirely (embeds are view-only for anonymous visitors). Keep annotations visible but not editable.
-
-**New RLS policies:**
-```sql
--- Drop old permissive insert
-DROP POLICY "Anyone can insert annotations" ON public.annotations;
-
--- Authenticated users can insert
-CREATE POLICY "Authenticated users can insert annotations"
-ON public.annotations FOR INSERT
-TO authenticated
-WITH CHECK (true);
-
--- Authenticated users can update any annotation
-DROP POLICY "Users can update own annotations" ON public.annotations;
-CREATE POLICY "Authenticated users can update annotations"
-ON public.annotations FOR UPDATE
-TO authenticated
-USING (true)
-WITH CHECK (true);
-
--- Authenticated users can delete any annotation
-DROP POLICY "Users can delete own annotations" ON public.annotations;
-CREATE POLICY "Authenticated users can delete annotations"
-ON public.annotations FOR DELETE
-TO authenticated
-USING (true);
-```
+### `src/components/ModelLibrary.tsx`
+- Update props interface to accept `loading`, `isAdmin`, `onModelsChanged` if needed, OR update Index to match existing interface. Will align Index to existing ModelLibrary interface since it's simpler.
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `src/pages/Index.tsx` | Add media/video URL fields to new annotation modal; pass `isReadOnly={!user}` to AnnotationPanel; hide placing mode when not signed in |
-| `src/pages/Embed.tsx` | Fetch media_url/video_url in annotation query; remove placing mode UI (view-only) |
-| `src/hooks/useAnnotations.ts` | Extend `addAnnotation` to accept media_url/video_url |
-| `src/components/AnnotationPanel.tsx` | Add `isReadOnly` prop to hide edit controls |
-| `src/components/AnnotationPin.tsx` | Use `clamp()` CSS for responsive 10-14pt font sizing on labels, descriptions, badges |
-| Database migration | Update RLS policies to restrict write operations to authenticated users only |
+| File | Change |
+|------|--------|
+| `src/hooks/useProgressiveModel.ts` | Fix Uint8Array[] type cast |
+| `src/components/ModelLoadingOverlay.tsx` | Add optional `modelName` prop |
+| `src/pages/Index.tsx` | Fix all prop mismatches for ModelLibrary, AnnotationPanel, and USDZExporter |
+| `src/components/ModelViewer.tsx` | Draco already enabled via `useGLTF(url, true)` — no change needed |
 
