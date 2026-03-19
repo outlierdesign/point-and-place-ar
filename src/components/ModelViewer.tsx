@@ -57,6 +57,7 @@ function CameraZoomer({
 
 function SceneModel({
   url,
+  originalUrl,
   isPlacingMode,
   onPlace,
   annotations,
@@ -68,6 +69,7 @@ function SceneModel({
   onGroupMatrix,
 }: {
   url: string;
+  originalUrl?: string;
   isPlacingMode: boolean;
   onPlace: (pos: [number, number, number]) => void;
   annotations: Annotation[];
@@ -78,7 +80,18 @@ function SceneModel({
   linkedModelIds?: Set<string>;
   onGroupMatrix?: (m: THREE.Matrix4) => void;
 }) {
-  const { scene } = useGLTF(url, true);
+  // Use useLoader with GLTFLoader to set resource path for texture resolution
+  const gltf = useLoader(GLTFLoader, url, (loader) => {
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    (loader as GLTFLoader).setDRACOLoader(dracoLoader);
+    // Set resource path to original URL directory so textures resolve correctly
+    if (originalUrl && !originalUrl.startsWith("blob:")) {
+      const basePath = originalUrl.substring(0, originalUrl.lastIndexOf("/") + 1);
+      (loader as GLTFLoader).setResourcePath(basePath);
+    }
+  });
+  const scene = gltf.scene;
   const groupRef = useRef<THREE.Group>(null);
 
   const { normalizedScale, yOffset, pinScale } = useMemo(() => {
