@@ -3,13 +3,16 @@ import ReactDOM from "react-dom";
 import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 
+export type TooltipType = "info" | "link";
+
 export interface Annotation {
   id: string;
   position: [number, number, number];
   label: string;
-  description: string
+  description: string;
   media_url?: string;
   video_url?: string;
+  tooltip_type?: TooltipType;
   linked_model_id?: string | null;
 }
 

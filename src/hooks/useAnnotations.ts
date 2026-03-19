@@ -13,6 +13,8 @@ function rowToAnnotation(row: {
   position_z: number;
   media_url?: string | null;
   video_url?: string | null;
+  tooltip_type?: string | null;
+  linked_model_id?: string | null;
 }): Annotation {
   return {
     id: row.id,
@@ -21,6 +23,8 @@ function rowToAnnotation(row: {
     position: [row.position_x, row.position_y, row.position_z],
     media_url: row.media_url ?? undefined,
     video_url: row.video_url ?? undefined,
+    tooltip_type: (row.tooltip_type === "link" ? "link" : "info") as Annotation["tooltip_type"],
+    linked_model_id: row.linked_model_id ?? undefined,
   };
 }
 
