@@ -13,6 +13,8 @@ function rowToAnnotation(row: {
   position_z: number;
   media_url?: string | null;
   video_url?: string | null;
+  tooltip_type?: string | null;
+  linked_model_id?: string | null;
 }): Annotation {
   return {
     id: row.id,
@@ -21,6 +23,8 @@ function rowToAnnotation(row: {
     position: [row.position_x, row.position_y, row.position_z],
     media_url: row.media_url ?? undefined,
     video_url: row.video_url ?? undefined,
+    tooltip_type: (row.tooltip_type === "link" ? "link" : "info") as Annotation["tooltip_type"],
+    linked_model_id: row.linked_model_id ?? undefined,
   };
 }
 
@@ -34,7 +38,7 @@ export function useAnnotations(modelId: string | null) {
     setLoading(true);
     const { data } = await supabase
       .from("annotations")
-      .select("id, label, description, position_x, position_y, position_z, media_url, video_url")
+      .select("id, label, description, position_x, position_y, position_z, media_url, video_url, tooltip_type, linked_model_id")
       .eq("model_id", modelId)
       .order("created_at", { ascending: true });
     setAnnotations((data ?? []).map(rowToAnnotation));
@@ -51,6 +55,8 @@ export function useAnnotations(modelId: string | null) {
     description: string,
     media_url?: string,
     video_url?: string,
+    tooltip_type?: string,
+    linked_model_id?: string,
   ): Promise<Annotation | null> => {
     if (!modelId) return null;
 
@@ -66,8 +72,10 @@ export function useAnnotations(modelId: string | null) {
         position_z: position[2],
         media_url: media_url || null,
         video_url: video_url || null,
+        tooltip_type: tooltip_type || "info",
+        linked_model_id: linked_model_id || null,
       })
-      .select("id, label, description, position_x, position_y, position_z, media_url, video_url")
+      .select("id, label, description, position_x, position_y, position_z, media_url, video_url, tooltip_type, linked_model_id")
       .single();
 
     if (error || !data) return null;
@@ -82,6 +90,8 @@ export function useAnnotations(modelId: string | null) {
     description: string,
     media_url?: string,
     video_url?: string,
+    tooltip_type?: string,
+    linked_model_id?: string,
   ) => {
     await supabase
       .from("annotations")
@@ -90,11 +100,13 @@ export function useAnnotations(modelId: string | null) {
         description: description || null,
         media_url: media_url || null,
         video_url: video_url || null,
+        tooltip_type: tooltip_type || "info",
+        linked_model_id: linked_model_id || null,
       })
       .eq("id", id);
     setAnnotations((prev) =>
       prev.map((a) =>
-        a.id === id ? { ...a, label, description, media_url, video_url } : a
+        a.id === id ? { ...a, label, description, media_url, video_url, tooltip_type: tooltip_type as Annotation["tooltip_type"], linked_model_id } : a
       )
     );
   }, []);

@@ -1,18 +1,21 @@
 import { useState } from "react";
-import { Annotation } from "./AnnotationPin";
-import { Trash2, Tag, MapPin, Plus, ChevronDown, ChevronRight, Pencil, Check, X, Image, Film } from "lucide-react";
+import { Annotation, TooltipType } from "./AnnotationPin";
+import { ModelRecord } from "./ModelLibrary";
+import { Trash2, Tag, MapPin, Plus, ChevronDown, ChevronRight, Pencil, Check, X, Image, Film, Link2, Info } from "lucide-react";
 
 interface AnnotationPanelProps {
   annotations: Annotation[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, label: string, description: string, media_url?: string, video_url?: string) => void;
+  onUpdate: (id: string, label: string, description: string, media_url?: string, video_url?: string, tooltip_type?: string, linked_model_id?: string) => void;
   isPlacingMode: boolean;
   onTogglePlacingMode: () => void;
   onClearAll: () => void;
   onClose?: () => void;
   isReadOnly?: boolean;
+  models?: ModelRecord[];
+  currentModelId?: string | null;
 }
 
 export default function AnnotationPanel({
@@ -26,6 +29,8 @@ export default function AnnotationPanel({
   onClearAll,
   onClose,
   isReadOnly = false,
+  models = [],
+  currentModelId,
 }: AnnotationPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -33,6 +38,10 @@ export default function AnnotationPanel({
   const [editDesc, setEditDesc] = useState("");
   const [editMediaUrl, setEditMediaUrl] = useState("");
   const [editVideoUrl, setEditVideoUrl] = useState("");
+  const [editTooltipType, setEditTooltipType] = useState<TooltipType>("info");
+  const [editLinkedModelId, setEditLinkedModelId] = useState("");
+
+  const otherModels = models.filter((m) => m.id !== currentModelId);
 
   const startEdit = (ann: Annotation) => {
     setEditingId(ann.id);
@@ -40,11 +49,19 @@ export default function AnnotationPanel({
     setEditDesc(ann.description);
     setEditMediaUrl(ann.media_url ?? "");
     setEditVideoUrl(ann.video_url ?? "");
+    setEditTooltipType(ann.tooltip_type ?? "info");
+    setEditLinkedModelId(ann.linked_model_id ?? "");
   };
 
   const saveEdit = () => {
     if (editingId) {
-      onUpdate(editingId, editLabel, editDesc, editMediaUrl || undefined, editVideoUrl || undefined);
+      onUpdate(
+        editingId, editLabel, editDesc,
+        editTooltipType === "info" ? (editMediaUrl || undefined) : undefined,
+        editTooltipType === "info" ? (editVideoUrl || undefined) : undefined,
+        editTooltipType,
+        editTooltipType === "link" ? (editLinkedModelId || undefined) : undefined,
+      );
       setEditingId(null);
     }
   };
@@ -143,32 +160,87 @@ export default function AnnotationPanel({
                         onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
                         onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
                       />
-                      {/* Media URL */}
-                      <div className="flex items-center gap-1.5">
-                        <Image size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
-                        <input
-                          className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
-                          style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                          value={editMediaUrl}
-                          onChange={(e) => setEditMediaUrl(e.target.value)}
-                          placeholder="Photo URL (https://...)"
-                          onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
-                          onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
-                        />
+                      {/* Tooltip Type Radio */}
+                      <div className="flex gap-3 py-1">
+                        <label
+                          className="flex items-center gap-1.5 cursor-pointer font-mono"
+                          style={{ fontSize: 10, color: editTooltipType === "info" ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+                        >
+                          <input
+                            type="radio"
+                            name={`tooltip-type-${ann.id}`}
+                            checked={editTooltipType === "info"}
+                            onChange={() => setEditTooltipType("info")}
+                            className="accent-[hsl(var(--gold))]"
+                            style={{ width: 12, height: 12 }}
+                          />
+                          <Info size={10} /> Info
+                        </label>
+                        <label
+                          className="flex items-center gap-1.5 cursor-pointer font-mono"
+                          style={{ fontSize: 10, color: editTooltipType === "link" ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+                        >
+                          <input
+                            type="radio"
+                            name={`tooltip-type-${ann.id}`}
+                            checked={editTooltipType === "link"}
+                            onChange={() => setEditTooltipType("link")}
+                            className="accent-[hsl(var(--gold))]"
+                            style={{ width: 12, height: 12 }}
+                          />
+                          <Link2 size={10} /> Link to Model
+                        </label>
                       </div>
-                      {/* Video URL */}
-                      <div className="flex items-center gap-1.5">
-                        <Film size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
-                        <input
-                          className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
-                          style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                          value={editVideoUrl}
-                          onChange={(e) => setEditVideoUrl(e.target.value)}
-                          placeholder="Video URL (YouTube, Vimeo...)"
-                          onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
-                          onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
-                        />
-                      </div>
+
+                      {editTooltipType === "info" ? (
+                        <>
+                          {/* Media URL */}
+                          <div className="flex items-center gap-1.5">
+                            <Image size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
+                            <input
+                              className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
+                              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              value={editMediaUrl}
+                              onChange={(e) => setEditMediaUrl(e.target.value)}
+                              placeholder="Photo URL (https://...)"
+                              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
+                              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
+                            />
+                          </div>
+                          {/* Video URL */}
+                          <div className="flex items-center gap-1.5">
+                            <Film size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
+                            <input
+                              className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
+                              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              value={editVideoUrl}
+                              onChange={(e) => setEditVideoUrl(e.target.value)}
+                              placeholder="Video URL (YouTube, Vimeo...)"
+                              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
+                              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        /* Model selector */
+                        <div className="flex items-center gap-1.5">
+                          <Link2 size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
+                          <select
+                            className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
+                            style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                            value={editLinkedModelId}
+                            onChange={(e) => setEditLinkedModelId(e.target.value)}
+                            onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
+                            onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
+                          >
+                            <option value="">Select a model...</option>
+                            {otherModels.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       {/* Save / Cancel */}
                       <div className="flex gap-2 pt-1">
                         <button
@@ -198,17 +270,25 @@ export default function AnnotationPanel({
                             {ann.description}
                           </div>
                         )}
-                        {/* Media/video indicators */}
-                        <div className="flex gap-2 mt-1">
-                          {ann.media_url && (
+                        {/* Type & media indicators */}
+                        <div className="flex gap-2 mt-1 flex-wrap">
+                          {ann.tooltip_type === "link" && ann.linked_model_id ? (
                             <span className="flex items-center gap-0.5" style={{ color: "hsl(var(--gold))", fontSize: 9 }}>
-                              <Image size={8} /> Photo
+                              <Link2 size={8} /> Linked Model
                             </span>
-                          )}
-                          {ann.video_url && (
-                            <span className="flex items-center gap-0.5" style={{ color: "hsl(var(--gold))", fontSize: 9 }}>
-                              <Film size={8} /> Video
-                            </span>
+                          ) : (
+                            <>
+                              {ann.media_url && (
+                                <span className="flex items-center gap-0.5" style={{ color: "hsl(var(--gold))", fontSize: 9 }}>
+                                  <Image size={8} /> Photo
+                                </span>
+                              )}
+                              {ann.video_url && (
+                                <span className="flex items-center gap-0.5" style={{ color: "hsl(var(--gold))", fontSize: 9 }}>
+                                  <Film size={8} /> Video
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                         <div className="font-mono mt-1" style={{ color: "hsl(var(--muted-foreground))", fontSize: 9 }}>

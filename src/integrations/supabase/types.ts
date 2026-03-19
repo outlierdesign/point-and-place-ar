@@ -20,11 +20,13 @@ export type Database = {
           description: string | null
           id: string
           label: string
+          linked_model_id: string | null
           media_url: string | null
           model_id: string
           position_x: number
           position_y: number
           position_z: number
+          tooltip_type: string
           updated_at: string
           user_id: string | null
           video_url: string | null
@@ -34,11 +36,13 @@ export type Database = {
           description?: string | null
           id?: string
           label?: string
+          linked_model_id?: string | null
           media_url?: string | null
           model_id: string
           position_x: number
           position_y: number
           position_z: number
+          tooltip_type?: string
           updated_at?: string
           user_id?: string | null
           video_url?: string | null
@@ -48,16 +52,25 @@ export type Database = {
           description?: string | null
           id?: string
           label?: string
+          linked_model_id?: string | null
           media_url?: string | null
           model_id?: string
           position_x?: number
           position_y?: number
           position_z?: number
+          tooltip_type?: string
           updated_at?: string
           user_id?: string | null
           video_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "annotations_linked_model_id_fkey"
+            columns: ["linked_model_id"]
+            isOneToOne: false
+            referencedRelation: "models"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "annotations_model_id_fkey"
             columns: ["model_id"]
