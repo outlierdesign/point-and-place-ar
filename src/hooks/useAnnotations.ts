@@ -38,7 +38,7 @@ export function useAnnotations(modelId: string | null) {
     setLoading(true);
     const { data } = await supabase
       .from("annotations")
-      .select("id, label, description, position_x, position_y, position_z, media_url, video_url")
+      .select("id, label, description, position_x, position_y, position_z, media_url, video_url, tooltip_type, linked_model_id")
       .eq("model_id", modelId)
       .order("created_at", { ascending: true });
     setAnnotations((data ?? []).map(rowToAnnotation));
