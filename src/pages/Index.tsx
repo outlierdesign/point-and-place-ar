@@ -301,7 +301,8 @@ export default function Index() {
         loader.load(modelBlobUrl || modelUrl, resolve, undefined, reject);
       });
       const exporter = new USDZExporter();
-      const arraybuffer = await exporter.parse(gltf.scene);
+      const result = await (exporter as any).parse(gltf.scene);
+      const arraybuffer = result instanceof ArrayBuffer ? result : new ArrayBuffer(0);
       const blob = new Blob([arraybuffer], { type: "model/vnd.usdz+zip" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
@@ -523,12 +524,10 @@ export default function Index() {
         <div className="absolute top-0 left-0 bottom-0 z-20 w-80 max-w-[85vw]">
           <ModelLibrary
             models={models}
-            loading={modelsLoading}
             selectedModelId={selectedModelId}
-            onSelectModel={handleSelectModel}
+            onSelectModel={(model, _url) => handleSelectModel(model)}
+            onRefresh={refetchModels}
             onClose={() => setModelsOpen(false)}
-            isAdmin={isAdmin}
-            onModelsChanged={refetchModels}
           />
         </div>
       )}
@@ -543,7 +542,10 @@ export default function Index() {
             onDelete={deleteAnnotation}
             onUpdate={updateAnnotation}
             onClose={() => setAnnotationsOpen(false)}
-            isAdmin={isAdmin}
+            isPlacingMode={isPlacingMode}
+            onTogglePlacingMode={() => setIsPlacingMode(!isPlacingMode)}
+            onClearAll={clearAll}
+            isReadOnly={!user}
           />
         </div>
       )}
