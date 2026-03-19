@@ -243,6 +243,7 @@ function KeyboardControls({ enabled }: { enabled: boolean }) {
 
 interface ModelViewerProps {
   modelUrl: string;
+  originalUrl?: string;
   modelKey: string;
   annotations: Annotation[];
   selectedId: string | null;
