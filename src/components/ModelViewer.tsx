@@ -295,6 +295,7 @@ export default function ModelViewer({
         <SceneModel
           key={modelKey}
           url={modelUrl}
+          originalUrl={originalUrl}
           isPlacingMode={isPlacingMode}
           onPlace={onPlace}
           annotations={annotations}
