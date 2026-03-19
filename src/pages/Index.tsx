@@ -356,9 +356,9 @@ export default function Index() {
       )}
 
       {/* 3D Canvas */}
-      {modelUrl && modelReady && (modelBlobUrl || modelUrl) ? (
+      {modelUrl && modelReady ? (
         <ModelViewer
-          modelUrl={modelBlobUrl || modelUrl}
+          modelUrl={modelUrl}
           originalUrl={modelUrl}
           modelKey={modelKey}
           annotations={enrichedAnnotations}
