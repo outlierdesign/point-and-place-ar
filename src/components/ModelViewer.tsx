@@ -1,13 +1,14 @@
 import { useRef, useCallback, useMemo, useEffect } from "react";
-import { Canvas, useThree, useFrame, ThreeEvent } from "@react-three/fiber";
+import { Canvas, useThree, useFrame, ThreeEvent, useLoader } from "@react-three/fiber";
 import {
   OrbitControls,
   Environment,
   Grid,
   ContactShadows,
-  useGLTF,
   Bounds,
 } from "@react-three/drei";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import * as THREE from "three";
 import AnnotationPin, { Annotation } from "./AnnotationPin";
 
@@ -56,6 +57,7 @@ function CameraZoomer({
 
 function SceneModel({
   url,
+  originalUrl,
   isPlacingMode,
   onPlace,
   annotations,
@@ -67,6 +69,7 @@ function SceneModel({
   onGroupMatrix,
 }: {
   url: string;
+  originalUrl?: string;
   isPlacingMode: boolean;
   onPlace: (pos: [number, number, number]) => void;
   annotations: Annotation[];
@@ -77,7 +80,18 @@ function SceneModel({
   linkedModelIds?: Set<string>;
   onGroupMatrix?: (m: THREE.Matrix4) => void;
 }) {
-  const { scene } = useGLTF(url, true);
+  // Use useLoader with GLTFLoader to set resource path for texture resolution
+  const gltf = useLoader(GLTFLoader, url, (loader) => {
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    (loader as GLTFLoader).setDRACOLoader(dracoLoader);
+    // Set resource path to original URL directory so textures resolve correctly
+    if (originalUrl && !originalUrl.startsWith("blob:")) {
+      const basePath = originalUrl.substring(0, originalUrl.lastIndexOf("/") + 1);
+      (loader as GLTFLoader).setResourcePath(basePath);
+    }
+  });
+  const scene = gltf.scene;
   const groupRef = useRef<THREE.Group>(null);
 
   const { normalizedScale, yOffset, pinScale } = useMemo(() => {
@@ -229,6 +243,7 @@ function KeyboardControls({ enabled }: { enabled: boolean }) {
 
 interface ModelViewerProps {
   modelUrl: string;
+  originalUrl?: string;
   modelKey: string;
   annotations: Annotation[];
   selectedId: string | null;
@@ -244,6 +259,7 @@ interface ModelViewerProps {
 
 export default function ModelViewer({
   modelUrl,
+  originalUrl,
   modelKey,
   annotations,
   selectedId,
@@ -279,6 +295,7 @@ export default function ModelViewer({
         <SceneModel
           key={modelKey}
           url={modelUrl}
+          originalUrl={originalUrl}
           isPlacingMode={isPlacingMode}
           onPlace={onPlace}
           annotations={annotations}
