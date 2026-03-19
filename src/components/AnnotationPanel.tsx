@@ -29,6 +29,8 @@ export default function AnnotationPanel({
   onClearAll,
   onClose,
   isReadOnly = false,
+  models = [],
+  currentModelId,
 }: AnnotationPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
