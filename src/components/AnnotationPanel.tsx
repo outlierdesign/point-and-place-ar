@@ -1,18 +1,21 @@
 import { useState } from "react";
-import { Annotation } from "./AnnotationPin";
-import { Trash2, Tag, MapPin, Plus, ChevronDown, ChevronRight, Pencil, Check, X, Image, Film } from "lucide-react";
+import { Annotation, TooltipType } from "./AnnotationPin";
+import { ModelRecord } from "./ModelLibrary";
+import { Trash2, Tag, MapPin, Plus, ChevronDown, ChevronRight, Pencil, Check, X, Image, Film, Link2, Info } from "lucide-react";
 
 interface AnnotationPanelProps {
   annotations: Annotation[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, label: string, description: string, media_url?: string, video_url?: string) => void;
+  onUpdate: (id: string, label: string, description: string, media_url?: string, video_url?: string, tooltip_type?: string, linked_model_id?: string) => void;
   isPlacingMode: boolean;
   onTogglePlacingMode: () => void;
   onClearAll: () => void;
   onClose?: () => void;
   isReadOnly?: boolean;
+  models?: ModelRecord[];
+  currentModelId?: string | null;
 }
 
 export default function AnnotationPanel({
