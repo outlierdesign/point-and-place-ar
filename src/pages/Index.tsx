@@ -569,7 +569,7 @@ export default function Index() {
           <div className="glass-panel p-6 w-96 max-w-[90vw] space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm tracking-widest uppercase text-foreground">New Pin</h2>
-              <button className="text-muted-foreground hover:text-foreground" onClick={() => { setPendingPos(null); setNewLabel(""); setNewDesc(""); setNewMediaUrl(""); setNewVideoUrl(""); }}>
+              <button className="text-muted-foreground hover:text-foreground" onClick={() => { setPendingPos(null); setNewLabel(""); setNewDesc(""); setNewMediaUrl(""); setNewVideoUrl(""); setNewTooltipType("info"); setNewLinkedModelId(""); }}>
                 <X size={16} />
               </button>
             </div>
@@ -588,31 +588,71 @@ export default function Index() {
                 onChange={(e) => setNewDesc(e.target.value)}
                 className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50 h-20 resize-none"
               />
-              <input
-                type="url"
-                placeholder="Image URL (optional)"
-                value={newMediaUrl}
-                onChange={(e) => setNewMediaUrl(e.target.value)}
-                className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50"
-              />
-              <input
-                type="url"
-                placeholder="Video URL (optional)"
-                value={newVideoUrl}
-                onChange={(e) => setNewVideoUrl(e.target.value)}
-                className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50"
-              />
+
+              {/* Tooltip Type Radio */}
+              <div className="flex gap-4 py-1">
+                <label className={`flex items-center gap-2 cursor-pointer text-xs tracking-wider uppercase ${newTooltipType === "info" ? "text-foreground" : "text-muted-foreground"}`}>
+                  <input
+                    type="radio"
+                    name="new-tooltip-type"
+                    checked={newTooltipType === "info"}
+                    onChange={() => setNewTooltipType("info")}
+                    className="accent-cyan-400"
+                  />
+                  <Info size={12} /> Info
+                </label>
+                <label className={`flex items-center gap-2 cursor-pointer text-xs tracking-wider uppercase ${newTooltipType === "link" ? "text-foreground" : "text-muted-foreground"}`}>
+                  <input
+                    type="radio"
+                    name="new-tooltip-type"
+                    checked={newTooltipType === "link"}
+                    onChange={() => setNewTooltipType("link")}
+                    className="accent-cyan-400"
+                  />
+                  <Link2 size={12} /> Link to Model
+                </label>
+              </div>
+
+              {newTooltipType === "info" ? (
+                <>
+                  <input
+                    type="url"
+                    placeholder="Image URL (optional)"
+                    value={newMediaUrl}
+                    onChange={(e) => setNewMediaUrl(e.target.value)}
+                    className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50"
+                  />
+                  <input
+                    type="url"
+                    placeholder="Video URL (optional)"
+                    value={newVideoUrl}
+                    onChange={(e) => setNewVideoUrl(e.target.value)}
+                    className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50"
+                  />
+                </>
+              ) : (
+                <select
+                  value={newLinkedModelId}
+                  onChange={(e) => setNewLinkedModelId(e.target.value)}
+                  className="w-full bg-background/50 border border-border/50 rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-cyan-500/50"
+                >
+                  <option value="">Select a model...</option>
+                  {models.filter((m) => m.id !== selectedModelId).map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="flex gap-2 justify-end">
               <button
                 className="px-4 py-2 text-xs tracking-widest uppercase text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => { setPendingPos(null); setNewLabel(""); setNewDesc(""); setNewMediaUrl(""); setNewVideoUrl(""); }}
+                onClick={() => { setPendingPos(null); setNewLabel(""); setNewDesc(""); setNewMediaUrl(""); setNewVideoUrl(""); setNewTooltipType("info"); setNewLinkedModelId(""); }}
               >
                 Cancel
               </button>
               <button
                 className="glass-panel btn-ghost-cyan px-4 py-2 text-xs tracking-widest uppercase disabled:opacity-50"
-                disabled={!newLabel.trim()}
+                disabled={!newLabel.trim() || (newTooltipType === "link" && !newLinkedModelId)}
                 onClick={confirmAnnotation}
               >
                 Save Pin
