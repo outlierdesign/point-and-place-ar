@@ -268,14 +268,22 @@ export default function Index() {
 
   const confirmAnnotation = useCallback(async () => {
     if (!pendingPos || !newLabel.trim()) return;
-    await addAnnotation(pendingPos, newLabel.trim(), newDesc.trim(), newMediaUrl.trim(), newVideoUrl.trim());
+    await addAnnotation(
+      pendingPos, newLabel.trim(), newDesc.trim(),
+      newTooltipType === "info" ? newMediaUrl.trim() : undefined,
+      newTooltipType === "info" ? newVideoUrl.trim() : undefined,
+      newTooltipType,
+      newTooltipType === "link" ? newLinkedModelId : undefined,
+    );
     setPendingPos(null);
     setNewLabel("");
     setNewDesc("");
     setNewMediaUrl("");
     setNewVideoUrl("");
+    setNewTooltipType("info");
+    setNewLinkedModelId("");
     setIsPlacingMode(false);
-  }, [pendingPos, newLabel, newDesc, newMediaUrl, newVideoUrl, addAnnotation]);
+  }, [pendingPos, newLabel, newDesc, newMediaUrl, newVideoUrl, newTooltipType, newLinkedModelId, addAnnotation]);
 
   const handleAR = useCallback(() => {
     if (iosArAvailable && modelUrl) {
