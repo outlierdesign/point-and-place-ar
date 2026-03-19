@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2, ArrowLeft } from "lucide-react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2, ArrowLeft, Link2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
