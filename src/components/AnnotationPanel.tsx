@@ -270,17 +270,25 @@ export default function AnnotationPanel({
                             {ann.description}
                           </div>
                         )}
-                        {/* Media/video indicators */}
-                        <div className="flex gap-2 mt-1">
-                          {ann.media_url && (
+                        {/* Type & media indicators */}
+                        <div className="flex gap-2 mt-1 flex-wrap">
+                          {ann.tooltip_type === "link" && ann.linked_model_id ? (
                             <span className="flex items-center gap-0.5" style={{ color: "hsl(var(--gold))", fontSize: 9 }}>
-                              <Image size={8} /> Photo
+                              <Link2 size={8} /> Linked Model
                             </span>
-                          )}
-                          {ann.video_url && (
-                            <span className="flex items-center gap-0.5" style={{ color: "hsl(var(--gold))", fontSize: 9 }}>
-                              <Film size={8} /> Video
-                            </span>
+                          ) : (
+                            <>
+                              {ann.media_url && (
+                                <span className="flex items-center gap-0.5" style={{ color: "hsl(var(--gold))", fontSize: 9 }}>
+                                  <Image size={8} /> Photo
+                                </span>
+                              )}
+                              {ann.video_url && (
+                                <span className="flex items-center gap-0.5" style={{ color: "hsl(var(--gold))", fontSize: 9 }}>
+                                  <Film size={8} /> Video
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                         <div className="font-mono mt-1" style={{ color: "hsl(var(--muted-foreground))", fontSize: 9 }}>
