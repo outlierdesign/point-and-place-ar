@@ -160,32 +160,87 @@ export default function AnnotationPanel({
                         onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
                         onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
                       />
-                      {/* Media URL */}
-                      <div className="flex items-center gap-1.5">
-                        <Image size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
-                        <input
-                          className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
-                          style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                          value={editMediaUrl}
-                          onChange={(e) => setEditMediaUrl(e.target.value)}
-                          placeholder="Photo URL (https://...)"
-                          onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
-                          onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
-                        />
+                      {/* Tooltip Type Radio */}
+                      <div className="flex gap-3 py-1">
+                        <label
+                          className="flex items-center gap-1.5 cursor-pointer font-mono"
+                          style={{ fontSize: 10, color: editTooltipType === "info" ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+                        >
+                          <input
+                            type="radio"
+                            name={`tooltip-type-${ann.id}`}
+                            checked={editTooltipType === "info"}
+                            onChange={() => setEditTooltipType("info")}
+                            className="accent-[hsl(var(--gold))]"
+                            style={{ width: 12, height: 12 }}
+                          />
+                          <Info size={10} /> Info
+                        </label>
+                        <label
+                          className="flex items-center gap-1.5 cursor-pointer font-mono"
+                          style={{ fontSize: 10, color: editTooltipType === "link" ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+                        >
+                          <input
+                            type="radio"
+                            name={`tooltip-type-${ann.id}`}
+                            checked={editTooltipType === "link"}
+                            onChange={() => setEditTooltipType("link")}
+                            className="accent-[hsl(var(--gold))]"
+                            style={{ width: 12, height: 12 }}
+                          />
+                          <Link2 size={10} /> Link to Model
+                        </label>
                       </div>
-                      {/* Video URL */}
-                      <div className="flex items-center gap-1.5">
-                        <Film size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
-                        <input
-                          className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
-                          style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                          value={editVideoUrl}
-                          onChange={(e) => setEditVideoUrl(e.target.value)}
-                          placeholder="Video URL (YouTube, Vimeo...)"
-                          onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
-                          onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
-                        />
-                      </div>
+
+                      {editTooltipType === "info" ? (
+                        <>
+                          {/* Media URL */}
+                          <div className="flex items-center gap-1.5">
+                            <Image size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
+                            <input
+                              className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
+                              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              value={editMediaUrl}
+                              onChange={(e) => setEditMediaUrl(e.target.value)}
+                              placeholder="Photo URL (https://...)"
+                              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
+                              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
+                            />
+                          </div>
+                          {/* Video URL */}
+                          <div className="flex items-center gap-1.5">
+                            <Film size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
+                            <input
+                              className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
+                              style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              value={editVideoUrl}
+                              onChange={(e) => setEditVideoUrl(e.target.value)}
+                              placeholder="Video URL (YouTube, Vimeo...)"
+                              onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
+                              onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        /* Model selector */
+                        <div className="flex items-center gap-1.5">
+                          <Link2 size={10} style={{ color: "hsl(var(--gold))", flexShrink: 0 }} />
+                          <select
+                            className="flex-1 bg-transparent border px-2 py-1 font-mono outline-none"
+                            style={{ borderColor: "hsl(var(--glass-border))", color: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                            value={editLinkedModelId}
+                            onChange={(e) => setEditLinkedModelId(e.target.value)}
+                            onFocus={(e) => (e.target.style.borderColor = "hsl(var(--gold))")}
+                            onBlur={(e) => (e.target.style.borderColor = "hsl(var(--glass-border))")}
+                          >
+                            <option value="">Select a model...</option>
+                            {otherModels.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       {/* Save / Cancel */}
                       <div className="flex gap-2 pt-1">
                         <button
