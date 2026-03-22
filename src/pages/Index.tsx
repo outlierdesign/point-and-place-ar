@@ -80,6 +80,7 @@ export default function Index() {
   const iosArAvailable = isIOS && modelUrlIsPublic;
 
   const getPublicUrl = useCallback((storagePath: string) => {
+    if (storagePath.startsWith('/models/')) return storagePath;
     const { data } = supabase.storage.from("models").getPublicUrl(storagePath);
     return data.publicUrl;
   }, []);

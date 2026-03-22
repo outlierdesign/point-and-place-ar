@@ -48,8 +48,9 @@ export default function Embed() {
 
       if (!m) { setNotFound(true); return; }
       setModel(m as ModelRecord);
-      const { data } = supabase.storage.from("models").getPublicUrl((m as ModelRecord).storage_path);
-      setModelUrl(data.publicUrl);
+      const sp = (m as ModelRecord).storage_path;
+      const resolvedUrl = sp.startsWith('/models/') ? sp : supabase.storage.from("models").getPublicUrl(sp).data.publicUrl;
+      setModelUrl(resolvedUrl);
 
       const { data: anns } = await supabase
         .from("annotations")

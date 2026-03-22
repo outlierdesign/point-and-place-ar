@@ -36,6 +36,7 @@ export default function ModelLibrary({
   const thumbInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const getPublicUrl = (storagePath: string) => {
+    if (storagePath.startsWith('/models/')) return storagePath;
     const { data } = supabase.storage.from("models").getPublicUrl(storagePath);
     return data.publicUrl;
   };
@@ -51,8 +52,8 @@ export default function ModelLibrary({
       setUploadError(`Unsupported type ".${ext}". Use .gltf or .glb`);
       return;
     }
-    if (models.length >= 6) {
-      setUploadError("Maximum 6 models allowed. Delete one first.");
+    if (models.length >= 10) {
+      setUploadError("Maximum 10 models allowed. Delete one first.");
       return;
     }
     setUploadError(null);
@@ -138,7 +139,7 @@ export default function ModelLibrary({
             Models
           </span>
           <span className="ml-auto font-mono text-xs mr-1" style={{ color: "hsl(var(--muted-foreground))" }}>
-            {models.length} / 6
+            {models.length} / 10
           </span>
           {onClose && (
             <button onClick={onClose} className="p-1 transition-colors hover:bg-white/5 flex-shrink-0" style={{ color: "hsl(var(--muted-foreground))" }} title="Close">
@@ -162,10 +163,10 @@ export default function ModelLibrary({
             />
             <button
               className={`w-full py-2 px-3 flex items-center gap-2 transition-all duration-200 ${
-                uploading || models.length >= 6 ? "opacity-50 cursor-not-allowed btn-ghost-cyan" : "btn-cyan"
+                uploading || models.length >= 10 ? "opacity-50 cursor-not-allowed btn-ghost-cyan" : "btn-cyan"
               }`}
               onClick={() => !uploading && models.length < 6 && fileInputRef.current?.click()}
-              disabled={uploading || models.length >= 6}
+              disabled={uploading || models.length >= 10}
             >
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
               <span>{uploading ? "Uploading..." : "Upload Model"}</span>
