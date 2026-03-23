@@ -26,13 +26,33 @@ interface AnnotationPinProps {
   pinScale?: number;
 }
 
+/**
+ * Vimeo privacy hashes for unlisted videos.
+ * Unlisted Vimeo videos require a hash parameter (?h=...) to embed.
+ * When adding new Vimeo videos, either paste the full URL with hash
+ * (e.g. https://vimeo.com/123456/abcdef) or add the hash here.
+ */
+const VIMEO_HASHES: Record<string, string> = {
+  "1169964237": "ae918a24fd",
+  "1169631012": "5dcf4df130",
+  "1170727891": "e60603a2b1",
+  "1170368764": "129cdce8ec",
+  "1169899899": "3c5e185cbb",
+  "1169865947": "1d83f1c9b4",
+  "1169561924": "c41853e77e",
+  "1169595066": "5d1192a3eb",
+  "1169848533": "91223827cc",
+};
+
 const getVideoEmbed = (url: string) => {
   const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/]+)/);
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1`;
   const vimeo = url.match(/vimeo\.com\/(\d+)(?:\/([a-zA-Z0-9]+))?/);
   if (vimeo) {
-    const hash = vimeo[2] ? `?h=${vimeo[2]}&autoplay=1` : `?autoplay=1`;
-    return `https://player.vimeo.com/video/${vimeo[1]}${hash}`;
+    const videoId = vimeo[1];
+    const hash = vimeo[2] || VIMEO_HASHES[videoId] || "";
+    const params = hash ? `?h=${hash}&autoplay=1` : `?autoplay=1`;
+    return `https://player.vimeo.com/video/${videoId}${params}`;
   }
   return url;
 };
