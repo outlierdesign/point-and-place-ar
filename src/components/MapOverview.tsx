@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo, useEffect } from "react";
+import React, { useRef, useCallback, useMemo, useEffect } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -8,6 +8,23 @@ import {
   useGLTF,
   Bounds,
 } from "@react-three/drei";
+
+/* Error boundary so a failed Environment/HDR load doesn't crash the scene */
+class R3FErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(err: Error) {
+    console.warn("[R3FErrorBoundary] caught:", err.message);
+  }
+  render() {
+    return this.state.hasError ? null : this.props.children;
+  }
+}
 import * as THREE from "three";
 import HotspotMarker from "./HotspotMarker";
 import { MapHotspot } from "@/hooks/useMapHotspots";
@@ -112,7 +129,9 @@ function MapBackground() {
         far={3}
         color="#001824"
       />
-      <Environment preset="night" />
+      <R3FErrorBoundary>
+        <Environment preset="night" />
+      </R3FErrorBoundary>
     </>
   );
 }

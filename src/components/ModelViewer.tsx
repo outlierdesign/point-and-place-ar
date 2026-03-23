@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo, useEffect, useState } from "react";
+import React, { useRef, useCallback, useMemo, useEffect, useState } from "react";
 import { Canvas, useThree, useFrame, ThreeEvent, useLoader } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -11,6 +11,23 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import * as THREE from "three";
 import AnnotationPin, { Annotation } from "./AnnotationPin";
+
+/* ── Error boundary so a failed Environment/HDR load doesn't crash the scene ── */
+class R3FErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(err: Error) {
+    console.warn("[R3FErrorBoundary] caught:", err.message);
+  }
+  render() {
+    return this.state.hasError ? null : this.props.children;
+  }
+}
 
 /* ── Camera zoom helper (lives inside the Canvas) ── */
 function CameraZoomer({
@@ -180,7 +197,9 @@ function SceneBackground() {
         color="#001824"
       />
 
-      <Environment preset="night" />
+      <R3FErrorBoundary>
+        <Environment preset="night" />
+      </R3FErrorBoundary>
     </>
   );
 }
