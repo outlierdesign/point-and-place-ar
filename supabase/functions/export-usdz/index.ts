@@ -1,22 +1,40 @@
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+/** Allowed origins for CORS. */
+const ALLOWED_ORIGINS = [
+  "https://glashapullagh.ie",
+  "https://www.glashapullagh.ie",
+  "https://point-and-place-ar.vercel.app",
+];
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
+
+/** UUID v4 format check. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: cors });
   }
 
   try {
     const url = new URL(req.url);
     const modelId = url.searchParams.get("model_id");
 
-    if (!modelId) {
+    // Validate model_id is a UUID
+    if (!modelId || !UUID_RE.test(modelId)) {
       return new Response(
-        JSON.stringify({ error: "model_id is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "model_id must be a valid UUID" }),
+        { status: 400, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -44,7 +62,7 @@ Deno.serve(async (req: Request) => {
       const publicUrl = `${supabaseUrl}/storage/v1/object/public/exports/${exportPath}`;
       return new Response(
         JSON.stringify({ url: publicUrl }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -57,7 +75,7 @@ Deno.serve(async (req: Request) => {
     if (!Array.isArray(models) || models.length === 0) {
       return new Response(
         JSON.stringify({ error: "Model not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
     const storagePath = models[0].storage_path;
@@ -70,7 +88,7 @@ Deno.serve(async (req: Request) => {
     if (!downloadResp.ok) {
       return new Response(
         JSON.stringify({ error: "Failed to download model" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
     const glbBytes = new Uint8Array(await downloadResp.arrayBuffer());
@@ -89,10 +107,9 @@ Deno.serve(async (req: Request) => {
       }
     );
     if (!uploadResp.ok) {
-      const err = await uploadResp.text();
       return new Response(
-        JSON.stringify({ error: "Failed to cache export: " + err }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Failed to cache export" }),
+        { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -100,12 +117,12 @@ Deno.serve(async (req: Request) => {
     const publicUrl = `${supabaseUrl}/storage/v1/object/public/exports/${exportPath}`;
     return new Response(
       JSON.stringify({ url: publicUrl }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...cors, "Content-Type": "application/json" } }
     );
-  } catch (err) {
+  } catch {
     return new Response(
-      JSON.stringify({ error: "Internal server error", details: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: "Internal server error" }),
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

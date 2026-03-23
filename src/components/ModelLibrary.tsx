@@ -60,6 +60,11 @@ export default function ModelLibrary({
       setUploadError(`Unsupported type ".${ext}". Use .gltf or .glb`);
       return;
     }
+    // Reject files over 100 MB
+    if (rawFile.size > 100 * 1024 * 1024) {
+      setUploadError("File too large. Maximum model size is 100 MB.");
+      return;
+    }
     if (models.length >= 10) {
       setUploadError("Maximum 10 models allowed. Delete one first.");
       return;
@@ -110,6 +115,11 @@ export default function ModelLibrary({
   const handleThumbnailUpload = async (modelId: string, file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (!["jpg", "jpeg", "png", "webp"].includes(ext ?? "")) {
+      return;
+    }
+    // Reject thumbnails over 5 MB
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("Thumbnail too large. Maximum size is 5 MB.");
       return;
     }
     setUploadingThumbId(modelId);

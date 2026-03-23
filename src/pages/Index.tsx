@@ -443,9 +443,10 @@ export default function Index() {
         </div>
         <div className="flex gap-2">
           {isAdmin && (
-            <button className="glass-panel btn-ghost-cyan p-2" onClick={() => navigate("/admin")} title="Admin Panel">
-              <Info size={14} />
-            </button>
+            <div className="glass-panel px-2 py-1 flex items-center gap-1.5" title="Signed in as admin">
+              <Info size={12} className="text-cyan-400" />
+              <span className="text-[10px] tracking-widest uppercase text-cyan-400">Admin</span>
+            </div>
           )}
           {user ? (
             <button className="glass-panel btn-ghost-cyan p-2" onClick={signOut} title="Sign Out">

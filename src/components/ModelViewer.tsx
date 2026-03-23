@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo, useEffect } from "react";
+import { useRef, useCallback, useMemo, useEffect, useState } from "react";
 import { Canvas, useThree, useFrame, ThreeEvent, useLoader } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -273,13 +273,36 @@ export default function ModelViewer({
   onZoomComplete,
 }: ModelViewerProps) {
   const groupMatrixRef = useRef<THREE.Matrix4>(new THREE.Matrix4());
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const zoomData = useMemo(() => {
     if (!zoomTarget) return null;
     return { position: zoomTarget.position, groupMatrix: groupMatrixRef.current };
   }, [zoomTarget]);
 
+  /*
+   * Force R3F to pick up container dimensions inside iframes.
+   * ResizeObserver sometimes misses the initial size in cross-origin
+   * iframes or proxy contexts, leaving the canvas at 300×150.
+   */
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // Nudge the container to re-trigger ResizeObserver
+    const id = setTimeout(() => {
+      el.style.width = "99.99%";
+      requestAnimationFrame(() => {
+        el.style.width = "100%";
+      });
+    }, 50);
+    return () => clearTimeout(id);
+  }, []);
+
   return (
+    <div
+      ref={containerRef}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+    >
     <Canvas
       shadows
       camera={{ position: [0, 2, 6], fov: 50 }}
@@ -317,5 +340,6 @@ export default function ModelViewer({
         enabled={!isPlacingMode}
       />
     </Canvas>
+    </div>
   );
 }

@@ -165,3 +165,14 @@
 .fade-in {
   animation: fade-in 0.3s ease-out forwards;
 }
+
+/*
+ * Force R3F canvas to fill its container.
+ * ResizeObserver can miss the initial size inside iframes/proxied contexts,
+ * leaving the canvas at the default 300×150.
+ */
+div[style*="position"] > canvas[data-engine],
+div[style*="position"] > canvas[style*="display: block"] {
+  width: 100% !important;
+  height: 100% !important;
+}
