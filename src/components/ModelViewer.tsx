@@ -243,7 +243,7 @@ function CursorSetter({ isPlacingMode }: { isPlacingMode: boolean }) {
  * that a browser window resize would use, so R3F handles it natively.
  */
 function CanvasResizeFix() {
-  const { gl } = useThree();
+  const { gl, size } = useThree();
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -251,26 +251,46 @@ function CanvasResizeFix() {
     const r3fWrapper = canvas.parentElement;
     if (!r3fWrapper) return;
 
+    let attempts = 0;
+    const maxAttempts = 20; // Try for up to ~5 seconds
+
     const nudge = () => {
-      const w = r3fWrapper.clientWidth;
-      if (w > 0 && canvas.width <= 300) {
-        // Briefly change width to trigger ResizeObserver
-        r3fWrapper.style.width = "99.99%";
+      const parentW = r3fWrapper.clientWidth;
+      const parentH = r3fWrapper.clientHeight;
+      const needsResize = parentW > 0 && parentH > 0 && canvas.width <= 300;
+
+      if (!needsResize) return; // Already resized, stop
+      attempts++;
+
+      // Method 1: Toggle wrapper width to trigger ResizeObserver
+      r3fWrapper.style.width = "99%";
+      setTimeout(() => {
+        r3fWrapper.style.width = "100%";
+
+        // Method 2: Also dispatch window resize event
+        window.dispatchEvent(new Event("resize"));
+
+        // Method 3: If still stuck after a frame, retry
         requestAnimationFrame(() => {
-          r3fWrapper.style.width = "100%";
+          if (canvas.width <= 300 && attempts < maxAttempts) {
+            setTimeout(nudge, 250);
+          }
         });
-      }
+      }, 50); // 50ms gap ensures ResizeObserver detects the change
     };
 
-    // Nudge at multiple timings to cover various layout states
+    // Start nudging at multiple timings
     const t1 = setTimeout(nudge, 50);
-    const t2 = setTimeout(nudge, 200);
-    const t3 = setTimeout(nudge, 800);
+    const t2 = setTimeout(nudge, 300);
+    const t3 = setTimeout(nudge, 1000);
+    const t4 = setTimeout(nudge, 2000);
 
     return () => {
+      attempts = maxAttempts; // Stop any pending retries
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
+      clearTimeout(t4);
     };
   }, [gl]);
 
