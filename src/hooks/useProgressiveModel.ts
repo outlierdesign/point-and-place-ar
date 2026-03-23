@@ -38,6 +38,7 @@ export function useProgressiveModel({ url }: UseProgressiveModelOptions) {
   });
   const [isReady, setIsReady] = useState(false);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [arrayBuffer, setArrayBuffer] = useState<ArrayBuffer | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const lastUrlRef = useRef<string | null>(null);
@@ -46,6 +47,7 @@ export function useProgressiveModel({ url }: UseProgressiveModelOptions) {
   const reset = useCallback(() => {
     setIsReady(false);
     setBlobUrl(null);
+    setArrayBuffer(null);
     setProgress({ loaded: 0, total: 0, percent: 0, phase: "idle", label: "" });
   }, []);
 
@@ -114,6 +116,7 @@ export function useProgressiveModel({ url }: UseProgressiveModelOptions) {
             const newBlobUrl = URL.createObjectURL(blob);
             blobUrlRef.current = newBlobUrl;
             setBlobUrl(newBlobUrl);
+            setArrayBuffer(buffer);
             setIsReady(true);
             setProgress({
               loaded: buffer.byteLength,
@@ -156,6 +159,14 @@ export function useProgressiveModel({ url }: UseProgressiveModelOptions) {
           const newBlobUrl = URL.createObjectURL(blob);
           blobUrlRef.current = newBlobUrl;
           setBlobUrl(newBlobUrl);
+          // Merge chunks into a single ArrayBuffer for direct GLTFLoader.parse()
+          const mergedBuffer = new Uint8Array(loaded);
+          let offset = 0;
+          for (const chunk of chunks) {
+            mergedBuffer.set(chunk, offset);
+            offset += chunk.length;
+          }
+          setArrayBuffer(mergedBuffer.buffer);
           setIsReady(true);
           setProgress({
             loaded,
@@ -195,5 +206,5 @@ export function useProgressiveModel({ url }: UseProgressiveModelOptions) {
     };
   }, [revokePreviousBlob]);
 
-  return { progress, isReady, blobUrl };
+  return { progress, isReady, blobUrl, arrayBuffer };
 }

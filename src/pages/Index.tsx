@@ -65,7 +65,7 @@ export default function Index() {
   const [modelsOpen, setModelsOpen] = useState(false);
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
   const [modelUrl, setModelUrl] = useState<string | null>(null);
-  const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl } = useProgressiveModel({ url: modelUrl });
+  const { progress: modelProgress, isReady: modelReady, blobUrl: modelBlobUrl, arrayBuffer: modelArrayBuffer } = useProgressiveModel({ url: modelUrl });
   const [modelKey, setModelKey] = useState("default");
   const [modelName, setModelName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -386,6 +386,7 @@ export default function Index() {
         <ModelViewer
           modelUrl={modelBlobUrl || modelUrl}
           originalUrl={modelUrl}
+          arrayBuffer={modelArrayBuffer}
           modelKey={modelKey}
           annotations={enrichedAnnotations}
           selectedId={selectedId}

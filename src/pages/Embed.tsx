@@ -29,7 +29,7 @@ export default function Embed() {
   const { modelId } = useParams<{ modelId: string }>();
   const [model, setModel] = useState<ModelRecord | null>(null);
   const [modelUrl, setModelUrl] = useState<string | null>(null);
-  const { isReady: modelReady, blobUrl: modelBlobUrl } = useProgressiveModel({ url: modelUrl });
+  const { isReady: modelReady, blobUrl: modelBlobUrl, arrayBuffer: modelArrayBuffer } = useProgressiveModel({ url: modelUrl });
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPlacingMode, setIsPlacingMode] = useState(false);
@@ -124,6 +124,7 @@ export default function Embed() {
           {modelReady && <ModelViewer
             modelUrl={modelBlobUrl || modelUrl}
             originalUrl={modelUrl}
+            arrayBuffer={modelArrayBuffer}
             modelKey={`embed_${modelId}`}
             annotations={annotations}
             selectedId={selectedId}

@@ -1,5 +1,5 @@
 import { useRef, useCallback, useMemo, useEffect, useState } from "react";
-import { Canvas, useThree, useFrame, ThreeEvent, useLoader } from "@react-three/fiber";
+import { Canvas, useThree, useFrame, ThreeEvent } from "@react-three/fiber";
 import {
   OrbitControls,
   Grid,
@@ -57,6 +57,7 @@ function CameraZoomer({
 function SceneModel({
   url,
   originalUrl,
+  arrayBuffer,
   isPlacingMode,
   onPlace,
   annotations,
@@ -69,6 +70,7 @@ function SceneModel({
 }: {
   url: string;
   originalUrl?: string;
+  arrayBuffer?: ArrayBuffer | null;
   isPlacingMode: boolean;
   onPlace: (pos: [number, number, number]) => void;
   annotations: Annotation[];
@@ -79,21 +81,45 @@ function SceneModel({
   linkedModelIds?: Set<string>;
   onGroupMatrix?: (m: THREE.Matrix4) => void;
 }) {
-  // Use useLoader with GLTFLoader to set resource path for texture resolution
-  const gltf = useLoader(GLTFLoader, url, (loader) => {
+  const [scene, setScene] = useState<THREE.Group | null>(null);
+
+  // Parse GLB from ArrayBuffer (bypasses CSP fetch restrictions on blob: URLs)
+  // Falls back to useLoader if no ArrayBuffer is provided
+  useEffect(() => {
+    const loader = new GLTFLoader();
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
-    (loader as GLTFLoader).setDRACOLoader(dracoLoader);
-    // Set resource path to original URL directory so textures resolve correctly
+    loader.setDRACOLoader(dracoLoader);
+
     if (originalUrl && !originalUrl.startsWith("blob:")) {
       const basePath = originalUrl.substring(0, originalUrl.lastIndexOf("/") + 1);
-      (loader as GLTFLoader).setResourcePath(basePath);
+      loader.setResourcePath(basePath);
     }
-  });
-  const scene = gltf.scene;
+
+    if (arrayBuffer) {
+      // Parse directly from in-memory ArrayBuffer — no network fetch needed
+      loader.parse(arrayBuffer, "", (gltf) => {
+        setScene(gltf.scene);
+      }, (err) => {
+        console.error("[SceneModel] Failed to parse GLB from buffer:", err);
+      });
+    } else {
+      // Fallback: load from URL (works on direct Vercel, local dev)
+      loader.load(url, (gltf) => {
+        setScene(gltf.scene);
+      }, undefined, (err) => {
+        console.error("[SceneModel] Failed to load GLB from URL:", err);
+      });
+    }
+
+    return () => {
+      dracoLoader.dispose();
+    };
+  }, [url, originalUrl, arrayBuffer]);
   const groupRef = useRef<THREE.Group>(null);
 
   const { normalizedScale, yOffset, pinScale } = useMemo(() => {
+    if (!scene) return { normalizedScale: 1, yOffset: 0, pinScale: 1 };
     const box = new THREE.Box3().setFromObject(scene);
     const size = new THREE.Vector3();
     box.getSize(size);
@@ -126,6 +152,8 @@ function SceneModel({
     },
     [isPlacingMode, onPlace]
   );
+
+  if (!scene) return null;
 
   return (
     <group ref={groupRef} scale={[normalizedScale, normalizedScale, normalizedScale]} position={[0, yOffset, 0]}>
@@ -293,6 +321,7 @@ function KeyboardControls({ enabled }: { enabled: boolean }) {
 interface ModelViewerProps {
   modelUrl: string;
   originalUrl?: string;
+  arrayBuffer?: ArrayBuffer | null;
   modelKey: string;
   annotations: Annotation[];
   selectedId: string | null;
@@ -309,6 +338,7 @@ interface ModelViewerProps {
 export default function ModelViewer({
   modelUrl,
   originalUrl,
+  arrayBuffer,
   modelKey,
   annotations,
   selectedId,
@@ -369,6 +399,7 @@ export default function ModelViewer({
           key={modelKey}
           url={modelUrl}
           originalUrl={originalUrl}
+          arrayBuffer={arrayBuffer}
           isPlacingMode={isPlacingMode}
           onPlace={onPlace}
           annotations={annotations}
