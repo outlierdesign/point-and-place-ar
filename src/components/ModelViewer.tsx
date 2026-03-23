@@ -195,39 +195,46 @@ function CursorSetter({ isPlacingMode }: { isPlacingMode: boolean }) {
  * Forces the renderer to match its container size on mount.
  * Works around an R3F bug where ResizeObserver doesn't fire inside iframes,
  * leaving the canvas stuck at the default 300×150.
+ *
+ * Strategy: on the first N frames, check if the canvas dimensions mismatch the
+ * container and call gl.setSize() + update R3F's internal store via invalidate().
  */
 function IframeResizeFix() {
-  const { gl, size } = useThree();
+  const { gl, invalidate, set } = useThree();
+  const frameCount = useRef(0);
+  const fixed = useRef(false);
 
-  useEffect(() => {
+  useFrame(() => {
+    if (fixed.current) return;
+    frameCount.current++;
+    // Check on frames 1, 5, 15, 30, 60
+    if (![1, 5, 15, 30, 60].includes(frameCount.current)) return;
+
     const canvas = gl.domElement;
     const container = canvas.parentElement;
     if (!container) return;
 
-    const fix = () => {
-      const { clientWidth: w, clientHeight: h } = container;
-      if (w > 0 && h > 0 && (canvas.width !== w * devicePixelRatio || canvas.height !== h * devicePixelRatio)) {
-        gl.setSize(w, h);
-        gl.setPixelRatio(window.devicePixelRatio);
-      }
-    };
+    const w = container.clientWidth;
+    const h = container.clientHeight;
 
-    // Try immediately, then again after short delays to cover async iframe layouts
-    fix();
-    const t1 = setTimeout(fix, 100);
-    const t2 = setTimeout(fix, 500);
-    const t3 = setTimeout(fix, 1500);
+    if (w > 0 && h > 0 && (canvas.width !== Math.floor(w * devicePixelRatio) || canvas.height !== Math.floor(h * devicePixelRatio))) {
+      gl.setSize(w, h);
+      gl.setPixelRatio(window.devicePixelRatio);
+      // Update R3F's internal size state
+      set({
+        size: {
+          width: w,
+          height: h,
+          top: 0,
+          left: 0,
+          updateStyle: false,
+        },
+      });
+      invalidate();
+    }
 
-    // Also listen for the iframe's own resize events
-    window.addEventListener("resize", fix);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      window.removeEventListener("resize", fix);
-    };
-  }, [gl]);
+    if (frameCount.current >= 60) fixed.current = true;
+  });
 
   return null;
 }
