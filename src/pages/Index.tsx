@@ -45,7 +45,7 @@ function buildLinkedAnnotations(
 export default function Index() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
-  const { models, loading: modelsLoading, refetch: refetchModels } = useModels();
+  const { models, loading: modelsLoading, refetch: refetchModels, setDefaultModel } = useModels();
 
   const [parentModelId, setParentModelId] = useState<string | null>(null);
   const [zoomTarget, setZoomTarget] = useState<{ position: [number, number, number] } | null>(null);
@@ -154,13 +154,15 @@ export default function Index() {
     }, 400);
   }, [parentModelId, models, getPublicUrl]);
 
-  // Auto-select parent model on first load
+  // Auto-select default model on first load
   useEffect(() => {
     if (!modelsLoading && models.length > 0 && selectedModelId === null && modelUrl === null) {
-      const overview = models.find((m) =>
-        m.name.toLowerCase().startsWith("glashapullagh jan 2025")
+      // Priority: is_default flag → name match → first model
+      const defaultModel = models.find((m) => m.is_default);
+      const restorationArea = models.find((m) =>
+        m.name.toLowerCase().includes("restoration area")
       );
-      const first = overview || models[0];
+      const first = defaultModel || restorationArea || models[0];
       const url = getPublicUrl(first.storage_path);
       setSelectedModelId(first.id);
       setModelUrl(url);
@@ -557,6 +559,7 @@ export default function Index() {
             onSelectModel={(model, _url) => handleSelectModel(model)}
             onRefresh={refetchModels}
             onClose={() => setModelsOpen(false)}
+            onSetDefault={setDefaultModel}
           />
         </div>
       )}

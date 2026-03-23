@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useModelOptimizer } from "@/hooks/useModelOptimizer";
-import { Upload, Trash2, CheckCircle2, Loader2, Box, ImagePlus, X, Zap } from "lucide-react";
+import { Upload, Trash2, CheckCircle2, Loader2, Box, ImagePlus, X, Zap, Star } from "lucide-react";
 
 export interface ModelRecord {
   id: string;
@@ -11,6 +11,7 @@ export interface ModelRecord {
   file_size: number | null;
   created_at: string;
   thumbnail_path: string | null;
+  is_default?: boolean;
 }
 
 interface ModelLibraryProps {
@@ -19,6 +20,7 @@ interface ModelLibraryProps {
   onSelectModel: (model: ModelRecord, url: string) => void;
   onRefresh: () => void;
   onClose?: () => void;
+  onSetDefault?: (modelId: string) => Promise<boolean>;
 }
 
 export default function ModelLibrary({
@@ -27,6 +29,7 @@ export default function ModelLibrary({
   onSelectModel,
   onRefresh,
   onClose,
+  onSetDefault,
 }: ModelLibraryProps) {
   const { isAdmin, adminLoading } = useAuth();
   const [uploading, setUploading] = useState(false);
@@ -315,6 +318,19 @@ export default function ModelLibrary({
                       {formatSize(model.file_size)} · {new Date(model.created_at).toLocaleDateString()}
                     </div>
                   </div>
+                  {isAdmin && onSetDefault && (
+                    <button
+                      className="p-1 transition-colors flex-shrink-0"
+                      style={{ color: model.is_default ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!model.is_default) onSetDefault(model.id);
+                      }}
+                      title={model.is_default ? "Default model" : "Set as default"}
+                    >
+                      <Star size={11} fill={model.is_default ? "currentColor" : "none"} />
+                    </button>
+                  )}
                   {isAdmin && (
                     <button
                       className="p-1 hover:bg-red-500/10 transition-colors flex-shrink-0"
