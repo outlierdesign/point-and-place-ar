@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Upload, Trash2, CheckCircle2, Loader2, Box, ImagePlus, X } from "lucide-react";
+import { useModelOptimizer } from "@/hooks/useModelOptimizer";
+import { Upload, Trash2, CheckCircle2, Loader2, Box, ImagePlus, X, Zap } from "lucide-react";
 
 export interface ModelRecord {
   id: string;
@@ -34,6 +35,7 @@ export default function ModelLibrary({
   const [uploadingThumbId, setUploadingThumbId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const thumbInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const { optimize, status: optimizeStatus, progress: optimizeProgress, reset: resetOptimizer } = useModelOptimizer();
 
   const getPublicUrl = (storagePath: string) => {
     if (storagePath.startsWith('/models/')) return storagePath;
@@ -46,8 +48,8 @@ export default function ModelLibrary({
     return data.publicUrl;
   };
 
-  const handleUpload = useCallback(async (file: File) => {
-    const ext = file.name.split(".").pop()?.toLowerCase();
+  const handleUpload = useCallback(async (rawFile: File) => {
+    const ext = rawFile.name.split(".").pop()?.toLowerCase();
     if (ext !== "gltf" && ext !== "glb") {
       setUploadError(`Unsupported type ".${ext}". Use .gltf or .glb`);
       return;
@@ -58,6 +60,19 @@ export default function ModelLibrary({
     }
     setUploadError(null);
     setUploading(true);
+    resetOptimizer();
+
+    // ── Auto-compress with Draco before uploading ──
+    let file = rawFile;
+    try {
+      if (ext === "glb") {
+        const result = await optimize(rawFile);
+        file = result.file;
+      }
+    } catch (err) {
+      console.warn("Draco compression failed, uploading original:", err);
+      // Fall back to uploading the raw file if compression fails
+    }
 
     const path = `${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
     const { error: uploadErr } = await supabase.storage
@@ -71,7 +86,7 @@ export default function ModelLibrary({
     }
 
     const { error: dbErr } = await supabase.from("models").insert({
-      name: file.name,
+      name: rawFile.name,
       storage_path: path,
       file_size: file.size,
     });
@@ -84,7 +99,7 @@ export default function ModelLibrary({
     }
 
     setUploading(false);
-  }, [models.length, onRefresh]);
+  }, [models.length, onRefresh, optimize, resetOptimizer]);
 
   const handleThumbnailUpload = async (modelId: string, file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
@@ -171,6 +186,27 @@ export default function ModelLibrary({
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
               <span>{uploading ? "Uploading..." : "Upload Model"}</span>
             </button>
+
+            {/* Draco compression progress */}
+            {uploading && optimizeStatus !== "idle" && (
+              <div
+                className="mt-2 font-mono text-xs px-2 py-1.5 flex items-center gap-2 fade-in"
+                style={{
+                  color: optimizeStatus === "done" || optimizeStatus === "already-optimized"
+                    ? "hsl(var(--gold))"
+                    : "hsl(var(--muted-foreground))",
+                  background: "hsl(var(--gold) / 0.06)",
+                  border: "1px solid hsl(var(--gold) / 0.2)",
+                }}
+              >
+                {optimizeStatus === "done" || optimizeStatus === "already-optimized" ? (
+                  <Zap size={10} style={{ color: "hsl(var(--gold))" }} />
+                ) : (
+                  <Loader2 size={10} className="animate-spin" />
+                )}
+                <span>{optimizeProgress}</span>
+              </div>
+            )}
 
             {uploadError && (
               <div className="mt-2 font-mono text-xs px-2 py-1.5 fade-in" style={{ color: "hsl(var(--destructive))", background: "hsl(var(--destructive) / 0.1)", border: "1px solid hsl(var(--destructive) / 0.3)" }}>
