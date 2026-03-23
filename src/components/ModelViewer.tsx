@@ -151,8 +151,13 @@ function SceneModel({
 function SceneBackground() {
   return (
     <>
-      <ambientLight intensity={0.3} />
-      <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
+      {/* Dark scene background colour so the canvas isn't pure black */}
+      <color attach="background" args={["#0a1e2e"]} />
+      <fog attach="fog" args={["#0a1e2e", 20, 40]} />
+
+      <ambientLight intensity={0.6} />
+      <hemisphereLight args={["#b1e1ff", "#0a1e2e", 0.5]} />
+      <directionalLight position={[5, 8, 5]} intensity={1.5} castShadow />
       <pointLight position={[-5, 3, -3]} intensity={0.8} color="#00d4ff" />
       <pointLight position={[5, -2, 5]} intensity={0.4} color="#0080ff" />
 
@@ -178,10 +183,6 @@ function SceneBackground() {
         far={3}
         color="#001824"
       />
-
-      {/* Environment preset removed — the HDR fetch fails when proxied
-         through glashapullagh.ie/viewer/ and crashes the R3F tree.
-         The ambient + directional + point lights above provide equivalent lighting. */}
     </>
   );
 }
