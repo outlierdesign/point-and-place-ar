@@ -243,54 +243,62 @@ function CursorSetter({ isPlacingMode }: { isPlacingMode: boolean }) {
  * that a browser window resize would use, so R3F handles it natively.
  */
 function CanvasResizeFix() {
-  const { gl, size } = useThree();
+  const { gl, set } = useThree();
 
   useEffect(() => {
     const canvas = gl.domElement;
-    // R3F's own wrapper: canvas → div (size observer target) → div (user wrapper)
     const r3fWrapper = canvas.parentElement;
-    if (!r3fWrapper) return;
+    const r3fOuter = r3fWrapper?.parentElement;
+    if (!r3fWrapper || !r3fOuter) return;
 
-    let attempts = 0;
-    const maxAttempts = 20; // Try for up to ~5 seconds
+    let stopped = false;
 
-    const nudge = () => {
-      const parentW = r3fWrapper.clientWidth;
-      const parentH = r3fWrapper.clientHeight;
-      const needsResize = parentW > 0 && parentH > 0 && canvas.width <= 300;
+    const fix = () => {
+      if (stopped) return;
+      const dpr = window.devicePixelRatio || 1;
+      const w = r3fOuter.clientWidth;
+      const h = r3fOuter.clientHeight;
 
-      if (!needsResize) return; // Already resized, stop
-      attempts++;
+      if (w > 0 && h > 0 && canvas.width <= 300) {
+        // Directly set the renderer size (bypasses broken ResizeObserver)
+        gl.setSize(w, h);
 
-      // Method 1: Toggle wrapper width to trigger ResizeObserver
-      r3fWrapper.style.width = "99%";
-      setTimeout(() => {
-        r3fWrapper.style.width = "100%";
+        // Also update R3F's internal state so components like OrbitControls
+        // and camera projections get the correct aspect ratio
+        set({ size: { width: w, height: h, top: 0, left: 0, updateStyle: true } });
 
-        // Method 2: Also dispatch window resize event
-        window.dispatchEvent(new Event("resize"));
-
-        // Method 3: If still stuck after a frame, retry
-        requestAnimationFrame(() => {
-          if (canvas.width <= 300 && attempts < maxAttempts) {
-            setTimeout(nudge, 250);
-          }
-        });
-      }, 50); // 50ms gap ensures ResizeObserver detects the change
+        // Set canvas CSS dimensions explicitly
+        canvas.style.width = w + "px";
+        canvas.style.height = h + "px";
+      }
     };
 
-    // Start nudging at multiple timings
-    const t1 = setTimeout(nudge, 50);
-    const t2 = setTimeout(nudge, 300);
-    const t3 = setTimeout(nudge, 1000);
-    const t4 = setTimeout(nudge, 2000);
+    // Try at multiple timings to cover slow model loads
+    const t1 = setTimeout(fix, 100);
+    const t2 = setTimeout(fix, 500);
+    const t3 = setTimeout(fix, 1500);
+    const t4 = setTimeout(fix, 3000);
+
+    // Also listen for window resize as an ongoing fix
+    const onResize = () => {
+      const w = r3fOuter.clientWidth;
+      const h = r3fOuter.clientHeight;
+      if (w > 0 && h > 0) {
+        gl.setSize(w, h);
+        set({ size: { width: w, height: h, top: 0, left: 0, updateStyle: true } });
+        canvas.style.width = w + "px";
+        canvas.style.height = h + "px";
+      }
+    };
+    window.addEventListener("resize", onResize);
 
     return () => {
-      attempts = maxAttempts; // Stop any pending retries
+      stopped = true;
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
       clearTimeout(t4);
+      window.removeEventListener("resize", onResize);
     };
   }, [gl]);
 
