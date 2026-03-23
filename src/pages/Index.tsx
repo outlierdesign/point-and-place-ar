@@ -85,7 +85,7 @@ export default function Index() {
     return data.publicUrl;
   }, []);
 
-  const { annotations, addAnnotation, updateAnnotation, deleteAnnotation, clearAll } = useAnnotations(selectedModelId);
+  const { annotations, error: annotationError, addAnnotation, updateAnnotation, deleteAnnotation, clearAll } = useAnnotations(selectedModelId);
 
   const linkedModelIds = useMemo(() => {
     const ids = new Set<string>();
@@ -465,6 +465,15 @@ export default function Index() {
       {loadError && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 glass-panel px-4 py-2 border-red-500/30">
           <p className="text-xs tracking-widest uppercase text-red-400">{loadError}</p>
+        </div>
+      )}
+
+      {/* Annotation error */}
+      {annotationError && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 glass-panel px-4 py-2 fade-in" style={{ borderColor: "hsl(var(--destructive) / 0.3)" }}>
+          <p className="text-xs tracking-widest uppercase" style={{ color: "hsl(var(--destructive))" }}>
+            Pin error: {annotationError}
+          </p>
         </div>
       )}
 
