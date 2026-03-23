@@ -243,13 +243,15 @@ export default function AnnotationPin({
                 style={{ position: "fixed", inset: 0, background: "rgba(10,20,14,0.92)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
                 onClick={() => setVideoOpen(false)}
               >
-                <div style={{ position: "relative", width: "80vw", maxWidth: 900 }}>
+                <div style={{ position: "relative", width: "80vw", maxWidth: 900 }} onClick={(e) => e.stopPropagation()}>
                   <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
                     <iframe
                       src={getVideoEmbed(annotation.video_url)}
                       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-                      allow="autoplay; fullscreen"
+                      allow="autoplay; fullscreen; picture-in-picture"
+                      allowFullScreen
                       title="Video"
+                      onClick={(e) => e.stopPropagation()}
                     />
                   </div>
                   <button onClick={() => setVideoOpen(false)} style={{ position: "absolute", top: -12, right: -12, background: "#192C20", border: "1px solid #A7782B", color: "#C9954E", width: 28, height: 28, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>{"×"}</button>
