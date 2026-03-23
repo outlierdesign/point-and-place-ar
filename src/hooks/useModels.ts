@@ -39,6 +39,30 @@ const LOCAL_MODELS: ModelRecord[] = [
     created_at: "2026-03-22T12:25:00Z",
     thumbnail_path: null,
   },
+  {
+    id: "local-coir-logs",
+    name: "Coir Logs",
+    storage_path: "/models/Coir_Logs.glb",
+    file_size: 2570000,
+    created_at: "2026-03-23T11:56:00Z",
+    thumbnail_path: null,
+  },
+  {
+    id: "local-composite-timber-dam",
+    name: "Composite Timber Dam",
+    storage_path: "/models/Composite_Timber_Dam.glb",
+    file_size: 2860000,
+    created_at: "2026-03-23T11:52:00Z",
+    thumbnail_path: null,
+  },
+  {
+    id: "local-restoration-area",
+    name: "Glashapullagh Restoration Area",
+    storage_path: "/models/Glashapullagh_Restoration_Area.glb",
+    file_size: 3760000,
+    created_at: "2026-03-23T11:40:00Z",
+    thumbnail_path: null,
+  },
 ];
 
 export function useModels() {
