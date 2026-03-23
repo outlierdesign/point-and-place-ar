@@ -84,11 +84,14 @@ function SceneModel({
   const [scene, setScene] = useState<THREE.Group | null>(null);
 
   // Parse GLB from ArrayBuffer (bypasses CSP fetch restrictions on blob: URLs)
-  // Falls back to useLoader if no ArrayBuffer is provided
+  // Falls back to URL loader if no ArrayBuffer is provided
   useEffect(() => {
     const loader = new GLTFLoader();
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+
+    // Use locally-bundled Draco decoder (CSP blocks gstatic.com on proxied domains)
+    const base = window.location.pathname.startsWith('/viewer') ? '/viewer' : '';
+    dracoLoader.setDecoderPath(`${base}/draco/`);
     loader.setDRACOLoader(dracoLoader);
 
     if (originalUrl && !originalUrl.startsWith("blob:")) {
@@ -97,10 +100,16 @@ function SceneModel({
     }
 
     if (arrayBuffer) {
-      // Parse directly from in-memory ArrayBuffer — no network fetch needed
+      // Temporarily disable createImageBitmap so GLTFParser uses TextureLoader
+      // (img.src = blob:) instead of ImageBitmapLoader (fetch(blob:) — blocked by CSP)
+      const origCIB = (window as any).createImageBitmap;
+      (window as any).createImageBitmap = undefined;
+
       loader.parse(arrayBuffer, "", (gltf) => {
+        (window as any).createImageBitmap = origCIB;
         setScene(gltf.scene);
       }, (err) => {
+        (window as any).createImageBitmap = origCIB;
         console.error("[SceneModel] Failed to parse GLB from buffer:", err);
       });
     } else {
