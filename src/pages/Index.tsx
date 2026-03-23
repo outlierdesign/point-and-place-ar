@@ -80,7 +80,11 @@ export default function Index() {
   const iosArAvailable = isIOS && modelUrlIsPublic;
 
   const getPublicUrl = useCallback((storagePath: string) => {
-    if (storagePath.startsWith('/models/')) return storagePath;
+    if (storagePath.startsWith('/models/')) {
+      // Local models in public/ dir — resolve relative to current origin + base path
+      const base = window.location.pathname.startsWith('/viewer') ? '/viewer' : '';
+      return `${base}${storagePath}`;
+    }
     const { data } = supabase.storage.from("models").getPublicUrl(storagePath);
     return data.publicUrl;
   }, []);
@@ -339,7 +343,8 @@ export default function Index() {
 
   const copyEmbedUrl = useCallback(() => {
     if (!selectedModelId) return;
-    const url = `${window.location.origin}/embed/${selectedModelId}`;
+    const base = window.location.pathname.startsWith('/viewer') ? '/viewer' : '';
+    const url = `${window.location.origin}${base}/embed/${selectedModelId}`;
     navigator.clipboard.writeText(url).then(() => alert("Embed URL copied!"));
   }, [selectedModelId]);
 

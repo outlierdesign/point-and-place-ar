@@ -41,7 +41,10 @@ export default function ModelLibrary({
   const { optimize, status: optimizeStatus, progress: optimizeProgress, reset: resetOptimizer } = useModelOptimizer();
 
   const getPublicUrl = (storagePath: string) => {
-    if (storagePath.startsWith('/models/')) return storagePath;
+    if (storagePath.startsWith('/models/')) {
+      const base = window.location.pathname.startsWith('/viewer') ? '/viewer' : '';
+      return `${base}${storagePath}`;
+    }
     const { data } = supabase.storage.from("models").getPublicUrl(storagePath);
     return data.publicUrl;
   };

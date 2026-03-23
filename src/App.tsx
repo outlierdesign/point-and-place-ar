@@ -11,12 +11,19 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+/** Detect if we're served under a proxy prefix (e.g. /viewer on glashapullagh.ie) */
+const detectBasename = (): string => {
+  const path = window.location.pathname;
+  if (path.startsWith("/viewer")) return "/viewer";
+  return "";
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename={detectBasename()}>
         <AuthProvider>
           <Routes>
             <Route path="/" element={<Index />} />

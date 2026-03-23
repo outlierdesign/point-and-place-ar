@@ -49,7 +49,8 @@ export default function Embed() {
       if (!m) { setNotFound(true); return; }
       setModel(m as ModelRecord);
       const sp = (m as ModelRecord).storage_path;
-      const resolvedUrl = sp.startsWith('/models/') ? sp : supabase.storage.from("models").getPublicUrl(sp).data.publicUrl;
+      const base = window.location.pathname.startsWith('/viewer') ? '/viewer' : '';
+      const resolvedUrl = sp.startsWith('/models/') ? `${base}${sp}` : supabase.storage.from("models").getPublicUrl(sp).data.publicUrl;
       setModelUrl(resolvedUrl);
 
       const { data: anns } = await supabase
