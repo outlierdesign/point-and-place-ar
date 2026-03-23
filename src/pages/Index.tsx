@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from "react";
-import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2, ArrowLeft, Link2 } from "lucide-react";
+import { Layers, Crosshair, Info, Maximize2, FolderOpen, X, LogOut, LogIn, MapPin, Download, Loader2, ArrowLeft, Link2, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModelViewer from "@/components/ModelViewer";
 import AnnotationPanel from "@/components/AnnotationPanel";
@@ -12,6 +12,32 @@ import { ModelRecord } from "@/components/ModelLibrary";
 import { supabase } from "@/integrations/supabase/client";
 import ModelLoadingOverlay from "@/components/ModelLoadingOverlay";
 import { useProgressiveModel } from "@/hooks/useProgressiveModel";
+
+/** Vimeo privacy hashes for unlisted videos */
+const VIMEO_HASHES: Record<string, string> = {
+  "1169964237": "ae918a24fd",
+  "1169631012": "5dcf4df130",
+  "1170727891": "e60603a2b1",
+  "1170368764": "129cdce8ec",
+  "1169899899": "3c5e185cbb",
+  "1169865947": "1d83f1c9b4",
+  "1169561924": "c41853e77e",
+  "1169595066": "5d1192a3eb",
+  "1169848533": "91223827cc",
+};
+
+function getVideoEmbedUrl(url: string): string {
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/]+)/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1`;
+  const vimeo = url.match(/vimeo\.com\/(\d+)(?:\/([a-zA-Z0-9]+))?/);
+  if (vimeo) {
+    const videoId = vimeo[1];
+    const hash = vimeo[2] || VIMEO_HASHES[videoId] || "";
+    const params = hash ? `?h=${hash}&autoplay=1` : `?autoplay=1`;
+    return `https://player.vimeo.com/video/${videoId}${params}`;
+  }
+  return url;
+}
 
 function buildLinkedAnnotations(
   annotations: Annotation[],
@@ -69,6 +95,8 @@ export default function Index() {
   const [modelKey, setModelKey] = useState("default");
   const [modelName, setModelName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [videoLightboxUrl, setVideoLightboxUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
@@ -391,10 +419,12 @@ export default function Index() {
           annotations={enrichedAnnotations}
           selectedId={selectedId}
           isPlacingMode={isPlacingMode}
+          showLabels={showLabels}
           onPlace={handlePlace}
           onSelectAnnotation={setSelectedId}
           onDeleteAnnotation={deleteAnnotation}
           onExploreLinked={handleExploreLinked}
+          onVideoPlay={(url) => setVideoLightboxUrl(url)}
           linkedModelIds={linkedModelIds}
           zoomTarget={zoomTarget}
           onZoomComplete={handleZoomComplete}
@@ -512,6 +542,18 @@ export default function Index() {
               </button>
             )}
 
+            {/* LABELS TOGGLE */}
+            {modelUrl && (
+              <button
+                className={`btn-ghost-cyan px-3 py-2 flex flex-col items-center gap-1 ${!showLabels ? "text-cyan-400/50" : "text-cyan-400"}`}
+                onClick={() => setShowLabels(!showLabels)}
+                title={showLabels ? "Hide Labels" : "Show Labels"}
+              >
+                {showLabels ? <Eye size={16} /> : <EyeOff size={16} />}
+                <span className="text-[10px] tracking-widest uppercase">Labels</span>
+              </button>
+            )}
+
             {/* PLACE PIN */}
             {modelUrl && user && (
               <button
@@ -588,6 +630,34 @@ export default function Index() {
             models={models}
             currentModelId={selectedModelId}
           />
+        </div>
+      )}
+
+      {/* Video lightbox (triggered by clicking annotation with video) */}
+      {videoLightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(10,20,14,0.92)", backdropFilter: "blur(6px)" }}
+          onClick={() => setVideoLightboxUrl(null)}
+        >
+          <div className="relative w-[80vw] max-w-[900px]" onClick={(e) => e.stopPropagation()}>
+            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+              <iframe
+                src={getVideoEmbedUrl(videoLightboxUrl)}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                allow="autoplay; fullscreen; picture-in-picture"
+                allowFullScreen
+                title="Video"
+              />
+            </div>
+            <button
+              onClick={() => setVideoLightboxUrl(null)}
+              className="absolute -top-3 -right-3 w-7 h-7 flex items-center justify-center text-sm"
+              style={{ background: "#192C20", border: "1px solid #A7782B", color: "#C9954E", cursor: "pointer" }}
+            >
+              {"×"}
+            </button>
+          </div>
         </div>
       )}
 

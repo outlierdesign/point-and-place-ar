@@ -5,7 +5,7 @@ import ModelViewer from "@/components/ModelViewer";
 import { Annotation } from "@/components/AnnotationPin";
 import { ModelRecord } from "@/components/ModelLibrary";
 import { useProgressiveModel } from "@/hooks/useProgressiveModel";
-import { Info, X, Layers } from "lucide-react";
+import { Info, X, Layers, Eye, EyeOff } from "lucide-react";
 
 function rowToAnnotation(row: {
   id: string; label: string; description: string | null;
@@ -36,6 +36,8 @@ export default function Embed() {
   const [pendingPos, setPendingPos] = useState<[number, number, number] | null>(null);
   const [newLabel, setNewLabel] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [showLabels, setShowLabels] = useState(true);
+  const [videoLightboxUrl, setVideoLightboxUrl] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
@@ -129,9 +131,11 @@ export default function Embed() {
             annotations={annotations}
             selectedId={selectedId}
             isPlacingMode={isPlacingMode}
+            showLabels={showLabels}
             onPlace={handlePlace}
             onSelectAnnotation={setSelectedId}
             onDeleteAnnotation={() => {}}
+            onVideoPlay={(url) => setVideoLightboxUrl(url)}
           />}
         </Suspense>
       </div>
@@ -149,13 +153,51 @@ export default function Embed() {
       </div>
 
       {/* Controls */}
-      <div className="absolute bottom-3 left-3 z-20 glass-panel px-3 py-2">
-        <div className="font-mono space-y-0.5" style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>
-          <div><span style={{ color: "hsl(var(--gold))" }}>Drag</span> — Orbit</div>
-          <div><span style={{ color: "hsl(var(--gold))" }}>Scroll</span> — Zoom</div>
-          <div><span style={{ color: "hsl(var(--gold))" }}>Right drag</span> — Pan</div>
+      <div className="absolute bottom-3 left-3 z-20 flex gap-2 items-end">
+        <div className="glass-panel px-3 py-2">
+          <div className="font-mono space-y-0.5" style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>
+            <div><span style={{ color: "hsl(var(--gold))" }}>Drag</span> — Orbit</div>
+            <div><span style={{ color: "hsl(var(--gold))" }}>Scroll</span> — Zoom</div>
+            <div><span style={{ color: "hsl(var(--gold))" }}>Right drag</span> — Pan</div>
+          </div>
         </div>
+        <button
+          className="glass-panel px-2 py-2 flex items-center gap-1.5 cursor-pointer"
+          onClick={() => setShowLabels(!showLabels)}
+          title={showLabels ? "Hide Labels" : "Show Labels"}
+          style={{ border: "1px solid hsl(var(--glass-border))" }}
+        >
+          {showLabels ? <Eye size={12} style={{ color: "hsl(var(--gold))" }} /> : <EyeOff size={12} style={{ color: "hsl(var(--muted-foreground))" }} />}
+          <span className="font-mono" style={{ fontSize: 9, color: showLabels ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))", letterSpacing: "0.08em", textTransform: "uppercase" }}>Labels</span>
+        </button>
       </div>
+
+      {/* Video lightbox */}
+      {videoLightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(10,20,14,0.92)", backdropFilter: "blur(6px)" }}
+          onClick={() => setVideoLightboxUrl(null)}
+        >
+          <div className="relative w-[80vw] max-w-[900px]" onClick={(e) => e.stopPropagation()}>
+            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+              <iframe
+                src={videoLightboxUrl}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                allow="autoplay; fullscreen; picture-in-picture"
+                allowFullScreen
+                title="Video"
+              />
+            </div>
+            <button
+              onClick={() => setVideoLightboxUrl(null)}
+              style={{ position: "absolute", top: -12, right: -12, background: "#192C20", border: "1px solid #A7782B", color: "#C9954E", width: 28, height: 28, cursor: "pointer", fontSize: 14, lineHeight: 1 }}
+            >
+              {"×"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Pending annotation modal */}
       {pendingPos && (

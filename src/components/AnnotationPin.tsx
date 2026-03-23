@@ -19,9 +19,11 @@ export interface Annotation {
 interface AnnotationPinProps {
   annotation: Annotation;
   selected: boolean;
+  showLabel?: boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onExploreLinked?: (modelId: string, position: [number, number, number]) => void;
+  onVideoPlay?: (videoUrl: string) => void;
   isLinked?: boolean;
   pinScale?: number;
 }
@@ -60,8 +62,10 @@ const getVideoEmbed = (url: string) => {
 export default function AnnotationPin({
   annotation,
   selected,
+  showLabel = true,
   onSelect,
   onExploreLinked,
+  onVideoPlay,
   isLinked = false,
   pinScale = 1,
 }: AnnotationPinProps) {
@@ -80,8 +84,14 @@ export default function AnnotationPin({
 
   const handlePinClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
+    // Linked annotations → navigate to that model
     if (isLinked && onExploreLinked && annotation.linked_model_id) {
       onExploreLinked(annotation.linked_model_id, annotation.position);
+      return;
+    }
+    // If annotation has a video, open the video player
+    if (annotation.video_url && onVideoPlay) {
+      onVideoPlay(annotation.video_url);
       return;
     }
     onSelect(annotation.id);
@@ -135,63 +145,69 @@ export default function AnnotationPin({
         <meshStandardMaterial color={isLinked ? "#0088aa" : goldDim} metalness={0.7} roughness={0.3} />
       </mesh>
 
-      {/* Collapsed badge */}
-      <Html position={[0.08, 0.06, 0]} distanceFactor={5} zIndexRange={[100, 0]} occlude={false}>
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isLinked && onExploreLinked && annotation.linked_model_id) {
-              onExploreLinked(annotation.linked_model_id, annotation.position);
-              return;
-            }
-            onSelect(annotation.id);
-            setExpanded((v) => !v);
-          }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 3,
-            background: isLinked ? "rgba(0, 30, 40, 0.88)" : "rgba(15, 25, 18, 0.82)",
-            border: `1px solid ${isLinked ? (hovered ? linkedColor : "#0088aa") : (expanded ? goldBright : goldDim)}`,
-            borderRadius: 3,
-            padding: "2px 6px",
-            cursor: "pointer",
-            userSelect: "none",
-            backdropFilter: "blur(4px)",
-            whiteSpace: "nowrap",
-            transition: "border-color 0.15s, background 0.15s",
-            pointerEvents: "auto",
-          }}
-        >
-          {isLinked && (
-            <span style={{ fontSize: 9, lineHeight: 1, color: linkedColor }}>{"▶"}</span>
-          )}
-          <span
+      {/* Collapsed badge — visible always when showLabel=true, only on hover when false */}
+      {(showLabel || hovered || selected) && (
+        <Html position={[0.08, 0.06, 0]} distanceFactor={5} zIndexRange={[100, 0]} occlude={false}>
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePinClick(e);
+            }}
             style={{
-              color: isLinked ? linkedColor : "#C9954E",
-              fontWeight: 600,
-              fontSize: "clamp(8px, 1vw, 12px)",
-              fontFamily: "'Red Hat Display', sans-serif",
-              letterSpacing: "0.03em",
-              maxWidth: "clamp(100px, 12vw, 160px)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              background: isLinked ? "rgba(0, 30, 40, 0.88)" : "rgba(15, 25, 18, 0.82)",
+              border: `1px solid ${isLinked ? (hovered ? linkedColor : "#0088aa") : (expanded ? goldBright : goldDim)}`,
+              borderRadius: 3,
+              padding: "2px 6px",
+              cursor: "pointer",
+              userSelect: "none",
+              backdropFilter: "blur(4px)",
+              whiteSpace: "nowrap",
+              transition: "border-color 0.15s, background 0.15s, opacity 0.2s",
+              pointerEvents: "auto",
+              opacity: showLabel ? 1 : (hovered || selected ? 0.95 : 0),
             }}
           >
-            {annotation.label}
-          </span>
-          {!isLinked && (
-            <span style={{ color: expanded ? "#C9954E" : "#7a5720", fontSize: 8, lineHeight: 1, fontWeight: 700, marginLeft: 1 }}>
-              {expanded ? "\u00d7" : "+"}
+            {isLinked && (
+              <span style={{ fontSize: 9, lineHeight: 1, color: linkedColor }}>{"▶"}</span>
+            )}
+            {annotation.video_url && !isLinked && (
+              <span style={{ fontSize: 9, lineHeight: 1, color: "#C9954E" }}>{"▶"}</span>
+            )}
+            <span
+              style={{
+                color: isLinked ? linkedColor : "#C9954E",
+                fontWeight: 600,
+                fontSize: "clamp(8px, 1vw, 12px)",
+                fontFamily: "'Red Hat Display', sans-serif",
+                letterSpacing: "0.03em",
+                maxWidth: "clamp(100px, 12vw, 160px)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {annotation.label}
             </span>
-          )}
-          {isLinked && (
-            <span style={{ color: "#0088aa", fontSize: 7, fontFamily: "'Red Hat Display', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>
-              EXPLORE
-            </span>
-          )}
-        </div>
-      </Html>
+            {!isLinked && !annotation.video_url && (
+              <span style={{ color: expanded ? "#C9954E" : "#7a5720", fontSize: 8, lineHeight: 1, fontWeight: 700, marginLeft: 1 }}>
+                {expanded ? "\u00d7" : "+"}
+              </span>
+            )}
+            {isLinked && (
+              <span style={{ color: "#0088aa", fontSize: 7, fontFamily: "'Red Hat Display', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>
+                EXPLORE
+              </span>
+            )}
+            {annotation.video_url && !isLinked && (
+              <span style={{ color: "#7a5720", fontSize: 7, fontFamily: "'Red Hat Display', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>
+                WATCH
+              </span>
+            )}
+          </div>
+        </Html>
+      )}
 
       {/* Expanded card — only for non-linked annotations */}
       {expanded && !isLinked && (
