@@ -192,49 +192,48 @@ function CursorSetter({ isPlacingMode }: { isPlacingMode: boolean }) {
 }
 
 /**
- * Forces the renderer to match its container size on mount.
- * Works around an R3F bug where ResizeObserver doesn't fire inside iframes,
- * leaving the canvas stuck at the default 300×150.
+ * Forces R3F to detect the correct canvas size on mount.
  *
- * Strategy: on the first N frames, check if the canvas dimensions mismatch the
- * container and call gl.setSize() + update R3F's internal store via invalidate().
+ * R3F uses a ResizeObserver on its wrapper div to set the canvas size, but
+ * the observer sometimes misses the initial layout — particularly when the
+ * app is loaded through a rewrite proxy or inside an iframe. The result is a
+ * canvas stuck at the HTML default of 300×150.
+ *
+ * Fix: after mount, nudge the R3F wrapper's width to trigger a
+ * ResizeObserver callback, then restore it. This is the same mechanism
+ * that a browser window resize would use, so R3F handles it natively.
  */
-function IframeResizeFix() {
-  const { gl, invalidate, set } = useThree();
-  const frameCount = useRef(0);
-  const fixed = useRef(false);
+function CanvasResizeFix() {
+  const { gl } = useThree();
 
-  useFrame(() => {
-    if (fixed.current) return;
-    frameCount.current++;
-    // Check on frames 1, 5, 15, 30, 60
-    if (![1, 5, 15, 30, 60].includes(frameCount.current)) return;
-
+  useEffect(() => {
     const canvas = gl.domElement;
-    const container = canvas.parentElement;
-    if (!container) return;
+    // R3F's own wrapper: canvas → div (size observer target) → div (user wrapper)
+    const r3fWrapper = canvas.parentElement;
+    if (!r3fWrapper) return;
 
-    const w = container.clientWidth;
-    const h = container.clientHeight;
+    const nudge = () => {
+      const w = r3fWrapper.clientWidth;
+      if (w > 0 && canvas.width <= 300) {
+        // Briefly change width to trigger ResizeObserver
+        r3fWrapper.style.width = "99.99%";
+        requestAnimationFrame(() => {
+          r3fWrapper.style.width = "100%";
+        });
+      }
+    };
 
-    if (w > 0 && h > 0 && (canvas.width !== Math.floor(w * devicePixelRatio) || canvas.height !== Math.floor(h * devicePixelRatio))) {
-      gl.setSize(w, h);
-      gl.setPixelRatio(window.devicePixelRatio);
-      // Update R3F's internal size state
-      set({
-        size: {
-          width: w,
-          height: h,
-          top: 0,
-          left: 0,
-          updateStyle: false,
-        },
-      });
-      invalidate();
-    }
+    // Nudge at multiple timings to cover various layout states
+    const t1 = setTimeout(nudge, 50);
+    const t2 = setTimeout(nudge, 200);
+    const t3 = setTimeout(nudge, 800);
 
-    if (frameCount.current >= 60) fixed.current = true;
-  });
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [gl]);
 
   return null;
 }
@@ -358,7 +357,7 @@ export default function ModelViewer({
       style={{ background: "transparent" }}
     >
       <SceneBackground />
-      <IframeResizeFix />
+      <CanvasResizeFix />
       <CursorSetter isPlacingMode={isPlacingMode} />
       <KeyboardControls enabled={!isPlacingMode} />
       <CameraZoomer target={zoomData} onComplete={onZoomComplete ?? (() => {})} />
