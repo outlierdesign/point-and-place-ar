@@ -191,6 +191,47 @@ function CursorSetter({ isPlacingMode }: { isPlacingMode: boolean }) {
   return null;
 }
 
+/**
+ * Forces the renderer to match its container size on mount.
+ * Works around an R3F bug where ResizeObserver doesn't fire inside iframes,
+ * leaving the canvas stuck at the default 300×150.
+ */
+function IframeResizeFix() {
+  const { gl, size } = useThree();
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const container = canvas.parentElement;
+    if (!container) return;
+
+    const fix = () => {
+      const { clientWidth: w, clientHeight: h } = container;
+      if (w > 0 && h > 0 && (canvas.width !== w * devicePixelRatio || canvas.height !== h * devicePixelRatio)) {
+        gl.setSize(w, h);
+        gl.setPixelRatio(window.devicePixelRatio);
+      }
+    };
+
+    // Try immediately, then again after short delays to cover async iframe layouts
+    fix();
+    const t1 = setTimeout(fix, 100);
+    const t2 = setTimeout(fix, 500);
+    const t3 = setTimeout(fix, 1500);
+
+    // Also listen for the iframe's own resize events
+    window.addEventListener("resize", fix);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      window.removeEventListener("resize", fix);
+    };
+  }, [gl]);
+
+  return null;
+}
+
 function KeyboardControls({ enabled }: { enabled: boolean }) {
   const { camera } = useThree();
   const keys = useRef<Set<string>>(new Set());
@@ -310,6 +351,7 @@ export default function ModelViewer({
       style={{ background: "transparent" }}
     >
       <SceneBackground />
+      <IframeResizeFix />
       <CursorSetter isPlacingMode={isPlacingMode} />
       <KeyboardControls enabled={!isPlacingMode} />
       <CameraZoomer target={zoomData} onComplete={onZoomComplete ?? (() => {})} />
