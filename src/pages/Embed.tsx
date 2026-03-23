@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import ModelViewer from "@/components/ModelViewer";
 import { Annotation } from "@/components/AnnotationPin";
 import { ModelRecord } from "@/components/ModelLibrary";
+import { useProgressiveModel } from "@/hooks/useProgressiveModel";
 import { Info, X, Layers } from "lucide-react";
 
 function rowToAnnotation(row: {
@@ -28,6 +29,7 @@ export default function Embed() {
   const { modelId } = useParams<{ modelId: string }>();
   const [model, setModel] = useState<ModelRecord | null>(null);
   const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const { isReady: modelReady, blobUrl: modelBlobUrl } = useProgressiveModel({ url: modelUrl });
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPlacingMode, setIsPlacingMode] = useState(false);
@@ -119,8 +121,9 @@ export default function Embed() {
       {/* 3D Canvas */}
       <div className="absolute inset-0 z-0">
         <Suspense fallback={<div />}>
-          <ModelViewer
-            modelUrl={modelUrl}
+          {modelReady && <ModelViewer
+            modelUrl={modelBlobUrl || modelUrl}
+            originalUrl={modelUrl}
             modelKey={`embed_${modelId}`}
             annotations={annotations}
             selectedId={selectedId}
@@ -128,7 +131,7 @@ export default function Embed() {
             onPlace={handlePlace}
             onSelectAnnotation={setSelectedId}
             onDeleteAnnotation={() => {}}
-          />
+          />}
         </Suspense>
       </div>
 
