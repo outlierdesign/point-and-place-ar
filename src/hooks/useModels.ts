@@ -4,11 +4,11 @@ import { ModelRecord } from "@/components/ModelLibrary";
 
 /**
  * DRACO-optimised models served from Vercel public directory.
- * These load 85-94 % faster than the original Supabase-hosted files.
+ * IDs match the database records so annotations (with FK) work correctly.
  */
 const LOCAL_MODELS: ModelRecord[] = [
   {
-    id: "local-geotextile",
+    id: "a1b2c3d4-0001-4000-8000-000000000001",
     name: "Geotextile",
     storage_path: "/models/Geotextile.glb",
     file_size: 1228800,
@@ -16,7 +16,7 @@ const LOCAL_MODELS: ModelRecord[] = [
     thumbnail_path: null,
   },
   {
-    id: "local-reprofiling-peat",
+    id: "a1b2c3d4-0002-4000-8000-000000000002",
     name: "Reprofiling Peat",
     storage_path: "/models/Reprofiling_Peat.glb",
     file_size: 3100000,
@@ -24,7 +24,7 @@ const LOCAL_MODELS: ModelRecord[] = [
     thumbnail_path: null,
   },
   {
-    id: "local-stone-dams",
+    id: "a1b2c3d4-0003-4000-8000-000000000003",
     name: "Stone Dams",
     storage_path: "/models/Stone_Dams.glb",
     file_size: 1750000,
@@ -32,7 +32,7 @@ const LOCAL_MODELS: ModelRecord[] = [
     thumbnail_path: null,
   },
   {
-    id: "local-timber-dams",
+    id: "a1b2c3d4-0004-4000-8000-000000000004",
     name: "Timber Dams",
     storage_path: "/models/Timber_Dams.glb",
     file_size: 1750000,
@@ -40,7 +40,7 @@ const LOCAL_MODELS: ModelRecord[] = [
     thumbnail_path: null,
   },
   {
-    id: "local-coir-logs",
+    id: "a1b2c3d4-0005-4000-8000-000000000005",
     name: "Coir Logs",
     storage_path: "/models/Coir_Logs.glb",
     file_size: 2570000,
@@ -48,7 +48,7 @@ const LOCAL_MODELS: ModelRecord[] = [
     thumbnail_path: null,
   },
   {
-    id: "local-composite-timber-dam",
+    id: "a1b2c3d4-0006-4000-8000-000000000006",
     name: "Composite Timber Dam",
     storage_path: "/models/Composite_Timber_Dam.glb",
     file_size: 2860000,
@@ -56,7 +56,7 @@ const LOCAL_MODELS: ModelRecord[] = [
     thumbnail_path: null,
   },
   {
-    id: "local-restoration-area",
+    id: "a1b2c3d4-0007-4000-8000-000000000007",
     name: "Glashapullagh Restoration Area",
     storage_path: "/models/Glashapullagh_Restoration_Area.glb",
     file_size: 3760000,
@@ -76,12 +76,24 @@ export function useModels() {
       .select("id, name, storage_path, file_size, created_at, thumbnail_path")
       .eq("is_public", true)
       .order("created_at", { ascending: true })
-      .limit(10);
+      .limit(50);
 
     const dbModels = (data as ModelRecord[]) ?? [];
 
-    // Merge: Supabase models first, then local DRACO-optimised models
-    setModels([...dbModels, ...LOCAL_MODELS]);
+    // Use DB records; add local overrides for models that share DB IDs
+    // (local paths load faster via Vercel CDN)
+    const dbIds = new Set(dbModels.map((m) => m.id));
+    const localOverrides = new Map(LOCAL_MODELS.map((m) => [m.id, m]));
+
+    // Replace DB records with local versions where available (faster CDN path)
+    const merged = dbModels.map((m) => localOverrides.get(m.id) ?? m);
+
+    // Add any local models not already in DB results
+    for (const lm of LOCAL_MODELS) {
+      if (!dbIds.has(lm.id)) merged.push(lm);
+    }
+
+    setModels(merged);
     setLoading(false);
   }, []);
 

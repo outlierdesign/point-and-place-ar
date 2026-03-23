@@ -93,7 +93,7 @@ export function useModelOptimizer() {
       // ── 5. Run the optimisation pipeline ──────────────────────
       await doc.transform(
         dedup(),
-        weld({ tolerance: 0.0001 }),
+        weld({ tolerance: 0.0001 } as any),
         prune(),
         draco({
           quantizePosition: 14,
