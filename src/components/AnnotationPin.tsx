@@ -147,7 +147,7 @@ export default function AnnotationPin({
 
       {/* Collapsed badge — visible always when showLabel=true, only on hover when false */}
       {(showLabel || hovered || selected) && (
-        <Html position={[0.08, 0.06, 0]} distanceFactor={5} zIndexRange={[100, 0]} occlude={false}>
+        <Html position={[0.08, 0.06, 0]} distanceFactor={5} zIndexRange={[16, 0]} occlude={false}>
           <div
             onClick={(e) => {
               e.stopPropagation();
@@ -211,7 +211,7 @@ export default function AnnotationPin({
 
       {/* Expanded card — only for non-linked annotations */}
       {expanded && !isLinked && (
-        <Html position={[0.12, 0.14, 0]} distanceFactor={5} zIndexRange={[200, 0]} occlude={false}>
+        <Html position={[0.12, 0.14, 0]} distanceFactor={5} zIndexRange={[40, 0]} occlude={false}>
           <div
             style={{
               background: "rgba(12, 22, 15, 0.92)",
